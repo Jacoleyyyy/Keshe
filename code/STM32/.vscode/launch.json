@@ -1,0 +1,96 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        // ============================================
+        // 方案一: OpenOCD + ST-Link (推荐)
+        // ============================================
+        {
+            "name": "STM32 Debug (OpenOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/smart_carrier.elf",
+            "servertype": "openocd",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f4x.cfg"
+            ],
+            "searchDir": [],
+            "runToEntryPoint": "main",
+            "svdFile": "${workspaceFolder}/STM32F407.svd",
+            "preLaunchTask": "Build STM32",
+            "postDebugTask": "",
+
+            // FreeRTOS 线程感知
+            "rtos": "FreeRTOS",
+            "rtosView": "threads",
+
+            // 启动后自动打开外设视图
+            "showDevDebugOutput": "parsed",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+
+            // 优化调试体验
+            "rttConfig": {
+                "enabled": false,
+                "address": "auto"
+            },
+            "graphConfig": [
+                {
+                    "name": "Motor RPM (FL)",
+                    "type": "float",
+                    "calculation": "g_motors[0].current_rpm",
+                    "visible": true
+                },
+                {
+                    "name": "Task State",
+                    "type": "int",
+                    "calculation": "g_sys.state",
+                    "visible": true
+                }
+            ]
+        },
+
+        // ============================================
+        // 方案二: J-Link (如果你用的是J-Link调试器)
+        // ============================================
+        {
+            "name": "STM32 Debug (J-Link)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/smart_carrier.elf",
+            "servertype": "jlink",
+            "device": "STM32F407VG",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "svdFile": "${workspaceFolder}/STM32F407.svd",
+            "preLaunchTask": "Build STM32",
+
+            "rtos": "FreeRTOS",
+            "rtosView": "threads"
+        },
+
+        // ============================================
+        // 方案三: OpenOCD Attach (附加到运行中的MCU)
+        // ============================================
+        {
+            "name": "STM32 Attach (不复位)",
+            "type": "cortex-debug",
+            "request": "attach",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/smart_carrier.elf",
+            "servertype": "openocd",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f4x.cfg"
+            ],
+            "svdFile": "${workspaceFolder}/STM32F407.svd",
+            "rtos": "FreeRTOS",
+            "rtosView": "threads"
+        }
+    ]
+}
