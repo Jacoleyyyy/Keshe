@@ -16,8 +16,9 @@
 ```
 Keshe/
 ├── rr.md                     ← 竞赛规则 + 课程设计要求
-├── CLAUDE.md                 ← 完整项目文档 (队友必读!)
+├── CLAUDE.md                 ← 完整项目架构文档
 ├── README.md                 ← 本文件
+├── 教程-从零开始.md           ← 🔥 小白入门教程 (环境搭建 → 调试)
 ├── .gitignore
 │
 └── code/
@@ -126,8 +127,9 @@ make flash      # 烧录
 
 ## 📚 文档导航
 
+- 🔥 **[新手入门教程](教程-从零开始.md)** — 零基础必看！安装→配置→调试全程带飞
 - 🏁 [竞赛规则](rr.md) — 评分标准、场地规格、物料编码
-- 📖 [完整项目文档](CLAUDE.md) — 架构设计、API、配置、调试
+- 📖 [完整项目文档](CLAUDE.md) — 架构设计、API、配置速查表
 - 🔬 [VSCode 调试指南](code/STM32/VSCode调试指南.md) — 从 Keil5 迁移到 VSCode
 - 🔌 [引脚定义](code/STM32/Inc/pin_config.h) — 硬件连接
 - 📡 [通信协议](code/STM32/Inc/protocol.h) — STM32 ↔ MaixCAM 协议
