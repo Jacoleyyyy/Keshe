@@ -1,285 +1,175 @@
 /**
  * @file    motor.c
- * @brief   直流电机控制实现 (PWM + 编码器 + PID)
+ * @brief   直流电机驱动 (GMR版: 双通道PWM + 编码器delta读数)
+ *
+ * 每个电机用2路PWM通道控制正反转:
+ *   CH1输出 → 正转, CH2=0
+ *   CH2输出 → 反转, CH1=0
+ *
+ * 编码器读取WHEELTEC方式: 读CNT后清零, 获取有符号16位增量
  */
 
 #include "motor.h"
 #include <string.h>
 #include <math.h>
 
-/* 全局电机数组 */
+/* PID参数 (GMR编码器, 500线×4×60=120000脉冲/转) */
+#define MOTOR_KP            0.06f
+#define MOTOR_KI            0.015f
+#define MOTOR_KD            0.008f
+#define MOTOR_DT            0.001f
+#define MOTOR_OUT_LIMIT     1.0f
+#define MOTOR_I_LIMIT       30.0f
+#define MOTOR_DEADBAND      0.5f
+
 Motor_t g_motors[MOTOR_NUM];
 
-/* PID 参数 (可调) */
-#define MOTOR_KP                0.08f
-#define MOTOR_KI                0.02f
-#define MOTOR_KD                0.01f
-#define MOTOR_PID_DT            0.001f  /* 1ms */
-#define MOTOR_PID_LIMIT         50.0f
-#define MOTOR_OUTPUT_LIMIT      1.0f
-#define MOTOR_DEADBAND          1.0f    /* 1 RPM */
-
-/* 最大转速 */
-#define MOTOR_MAX_RPM           300.0f
-
-/**
- * @brief  初始化单个电机
- */
 void Motor_Init(MotorID_t id,
-                TIM_HandleTypeDef *htim_pwm, uint32_t pwm_channel,
-                TIM_HandleTypeDef *htim_enc,
-                GPIO_TypeDef *dir_port, uint16_t dir_pin)
+                TIM_HandleTypeDef *htim_ch1, uint32_t ch1,
+                TIM_HandleTypeDef *htim_ch2, uint32_t ch2,
+                TIM_HandleTypeDef *htim_enc)
 {
     Motor_t *m = &g_motors[id];
     memset(m, 0, sizeof(Motor_t));
 
     m->id = id;
-    m->htim_pwm = htim_pwm;
-    m->pwm_channel = pwm_channel;
+    m->htim_ch1 = htim_ch1;
+    m->ch1_channel = ch1;
+    m->htim_ch2 = htim_ch2;
+    m->ch2_channel = ch2;
     m->htim_enc = htim_enc;
-    m->direction = MOTOR_DIR_FORWARD;
-    m->initialized = true;
 
-    /* 初始化速度 PID */
-    PID_Init(&m->pid, MOTOR_KP, MOTOR_KI, MOTOR_KD,
-             MOTOR_PID_DT, PID_MODE_POSITION);
-    PID_SetOutputLimit(&m->pid, MOTOR_OUTPUT_LIMIT);
-    PID_SetIntegralParam(&m->pid, MOTOR_PID_LIMIT, true);
+    /* 初始化PID */
+    PID_Init(&m->pid, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_DT, PID_MODE_POSITION);
+    PID_SetOutputLimit(&m->pid, MOTOR_OUT_LIMIT);
+    PID_SetIntegralParam(&m->pid, MOTOR_I_LIMIT, true);
     PID_SetDeadband(&m->pid, MOTOR_DEADBAND);
+
+    /* 启动PWM (占空比0) */
+    if (htim_ch1) HAL_TIM_PWM_Start(htim_ch1, ch1);
+    if (htim_ch2) HAL_TIM_PWM_Start(htim_ch2, ch2);
+    __HAL_TIM_SET_COMPARE(htim_ch1, ch1, 0);
+    __HAL_TIM_SET_COMPARE(htim_ch2, ch2, 0);
 
     /* 启动编码器 */
     if (htim_enc) {
+        __HAL_TIM_SET_COUNTER(htim_enc, 0);
         HAL_TIM_Encoder_Start(htim_enc, TIM_CHANNEL_ALL);
     }
-
-    /* 启动 PWM */
-    if (htim_pwm) {
-        HAL_TIM_PWM_Start(htim_pwm, pwm_channel);
-    }
-
-    /* 方向引脚 */
-    GPIO_InitTypeDef gpio = {0};
-    gpio.Pin = dir_pin;
-    gpio.Mode = GPIO_MODE_OUTPUT_PP;
-    gpio.Pull = GPIO_NOPULL;
-    gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(dir_port, &gpio);
 }
 
-/* 电机引脚配置表 */
-typedef struct {
-    TIM_HandleTypeDef *htim_pwm;
-    uint32_t pwm_channel;
-    TIM_HandleTypeDef *htim_enc;
-    GPIO_TypeDef *dir_port;
-    uint16_t dir_pin;
-} MotorPinConfig_t;
-
-/**
- * @brief  初始化所有电机 (使用 pin_config.h 定义)
- */
 void Motor_InitAll(void)
 {
-    /* 外部需在调用前初始化好定时器句柄 */
-    extern TIM_HandleTypeDef htim_motor_pwm;
-    extern TIM_HandleTypeDef htim_m1_enc, htim_m2_enc, htim_m3_enc, htim_m4_enc;
+    extern TIM_HandleTypeDef htim1, htim9, htim10, htim11;
+    extern TIM_HandleTypeDef htim2_enc, htim3_enc, htim4_enc, htim5_enc;
 
-    const MotorPinConfig_t configs[MOTOR_NUM] = {
-        [MOTOR_FRONT_LEFT]  = { &htim_motor_pwm, M1_PWM_CHANNEL, &htim_m1_enc, M1_DIR_PORT, M1_DIR_PIN },
-        [MOTOR_FRONT_RIGHT] = { &htim_motor_pwm, M2_PWM_CHANNEL, &htim_m2_enc, M2_DIR_PORT, M2_DIR_PIN },
-        [MOTOR_REAR_LEFT]   = { &htim_motor_pwm, M3_PWM_CHANNEL, &htim_m3_enc, M3_DIR_PORT, M3_DIR_PIN },
-        [MOTOR_REAR_RIGHT]  = { &htim_motor_pwm, M4_PWM_CHANNEL, &htim_m4_enc, M4_DIR_PORT, M4_DIR_PIN },
-    };
-
-    for (int i = 0; i < MOTOR_NUM; i++) {
-        Motor_Init((MotorID_t)i,
-                   configs[i].htim_pwm, configs[i].pwm_channel,
-                   configs[i].htim_enc,
-                   configs[i].dir_port, configs[i].dir_pin);
-    }
+    /* 电机A: TIM10_CH1 + TIM11_CH1, 编码器D=TIM5 */
+    Motor_Init(MOTOR_A, &htim10, TIM_CHANNEL_1, &htim11, TIM_CHANNEL_1, &htim5_enc);
+    /* 电机B: TIM9_CH1 + TIM9_CH2, 编码器C=TIM4 */
+    Motor_Init(MOTOR_B, &htim9, TIM_CHANNEL_1, &htim9, TIM_CHANNEL_2, &htim4_enc);
+    /* 电机C: TIM1_CH2 + TIM1_CH1, 编码器A=TIM2 */
+    Motor_Init(MOTOR_C, &htim1, TIM_CHANNEL_2, &htim1, TIM_CHANNEL_1, &htim2_enc);
+    /* 电机D: TIM1_CH4 + TIM1_CH3, 编码器B=TIM3 */
+    Motor_Init(MOTOR_D, &htim1, TIM_CHANNEL_4, &htim1, TIM_CHANNEL_3, &htim3_enc);
 }
 
 /**
- * @brief  设置电机方向
- */
-void Motor_SetDirection(MotorID_t id, MotorDir_t dir)
-{
-    Motor_t *m = &g_motors[id];
-    if (!m->initialized) return;
-    m->direction = dir;
-}
-
-/**
- * @brief  设置 PWM 占空比
+ * @brief  设置PWM占空比 (正=CH1输出, 负=CH2输出)
  */
 void Motor_SetDuty(MotorID_t id, float duty)
 {
     Motor_t *m = &g_motors[id];
-    if (!m->initialized) return;
+    if (!m->htim_ch1) return;
 
     /* 限幅 */
     if (duty > 1.0f) duty = 1.0f;
-    if (duty < 0.0f) duty = 0.0f;
-
-    /* 根据方向取反 */
-    if (duty < 0) {
-        m->direction = MOTOR_DIR_BACKWARD;
-        duty = -duty;
-    }
+    if (duty < -1.0f) duty = -1.0f;
 
     m->duty_cycle = duty;
+    uint32_t pulse = (uint32_t)(fabsf(duty) * MOTOR_PWM_MAX);
 
-    uint32_t pulse = (uint32_t)(duty * MOTOR_PWM_MAX);
-    __HAL_TIM_SET_COMPARE(m->htim_pwm, m->pwm_channel, pulse);
-
-    /* 方向输出 */
-    if (m->direction == MOTOR_DIR_FORWARD) {
-        switch (id) {
-            case MOTOR_FRONT_LEFT:  HAL_GPIO_WritePin(M1_DIR_PORT, M1_DIR_PIN, GPIO_PIN_RESET); break;
-            case MOTOR_FRONT_RIGHT: HAL_GPIO_WritePin(M2_DIR_PORT, M2_DIR_PIN, GPIO_PIN_RESET); break;
-            case MOTOR_REAR_LEFT:   HAL_GPIO_WritePin(M3_DIR_PORT, M3_DIR_PIN, GPIO_PIN_RESET); break;
-            case MOTOR_REAR_RIGHT:  HAL_GPIO_WritePin(M4_DIR_PORT, M4_DIR_PIN, GPIO_PIN_RESET); break;
-            default: break;
-        }
+    if (duty >= 0) {
+        __HAL_TIM_SET_COMPARE(m->htim_ch1, m->ch1_channel, pulse);
+        __HAL_TIM_SET_COMPARE(m->htim_ch2, m->ch2_channel, 0);
     } else {
-        switch (id) {
-            case MOTOR_FRONT_LEFT:  HAL_GPIO_WritePin(M1_DIR_PORT, M1_DIR_PIN, GPIO_PIN_SET); break;
-            case MOTOR_FRONT_RIGHT: HAL_GPIO_WritePin(M2_DIR_PORT, M2_DIR_PIN, GPIO_PIN_SET); break;
-            case MOTOR_REAR_LEFT:   HAL_GPIO_WritePin(M3_DIR_PORT, M3_DIR_PIN, GPIO_PIN_SET); break;
-            case MOTOR_REAR_RIGHT:  HAL_GPIO_WritePin(M4_DIR_PORT, M4_DIR_PIN, GPIO_PIN_SET); break;
-            default: break;
-        }
+        __HAL_TIM_SET_COMPARE(m->htim_ch1, m->ch1_channel, 0);
+        __HAL_TIM_SET_COMPARE(m->htim_ch2, m->ch2_channel, pulse);
     }
 }
 
-/**
- * @brief  设置目标转速
- */
 void Motor_SetTargetRPM(MotorID_t id, float rpm)
 {
     Motor_t *m = &g_motors[id];
-    if (!m->initialized) return;
-
-    /* 限幅 */
     if (rpm > MOTOR_MAX_RPM) rpm = MOTOR_MAX_RPM;
     if (rpm < -MOTOR_MAX_RPM) rpm = -MOTOR_MAX_RPM;
-
     m->target_rpm = rpm;
     PID_SetTarget(&m->pid, rpm);
-
-    /* 若目标转速为0，停止 */
-    if (fabsf(rpm) < 0.1f) {
-        Motor_SetDuty(id, 0.0f);
-    }
 }
 
-/**
- * @brief  停止单个电机
- */
 void Motor_Stop(MotorID_t id)
 {
-    Motor_SetTargetRPM(id, 0.0f);
-    Motor_SetDuty(id, 0.0f);
+    Motor_SetTargetRPM(id, 0);
+    Motor_SetDuty(id, 0);
 }
 
-/**
- * @brief  急停所有电机
- */
 void Motor_EmergencyStop(void)
 {
     for (int i = 0; i < MOTOR_NUM; i++) {
-        g_motors[i].target_rpm = 0.0f;
+        g_motors[i].target_rpm = 0;
         PID_Reset(&g_motors[i].pid);
-        __HAL_TIM_SET_COMPARE(g_motors[i].htim_pwm, g_motors[i].pwm_channel, 0);
+        Motor_SetDuty((MotorID_t)i, 0);
     }
 }
 
 /**
- * @brief  读取编码器计数值
+ * @brief  读取编码器增量 (WHEELTEC方式: 读后清零)
+ * @return 本次周期内的编码器脉冲增量 (有符号16位)
  */
-int32_t Motor_GetEncoderCount(MotorID_t id)
+int16_t Motor_GetEncoderDelta(MotorID_t id)
 {
     Motor_t *m = &g_motors[id];
-    if (!m->initialized || !m->htim_enc) return 0;
+    if (!m->htim_enc) return 0;
 
-    int32_t count = (int32_t)__HAL_TIM_GET_COUNTER(m->htim_enc);
-    return count;
+    int16_t delta = (int16_t)(__HAL_TIM_GET_COUNTER(m->htim_enc));
+    __HAL_TIM_SET_COUNTER(m->htim_enc, 0);
+    m->enc_delta = delta;
+    return delta;
 }
 
-/**
- * @brief  获取当前转速 (RPM)
- */
 float Motor_GetCurrentRPM(MotorID_t id)
 {
-    Motor_t *m = &g_motors[id];
-    if (!m->initialized) return 0.0f;
-    return m->current_rpm;
+    return g_motors[id].current_rpm;
 }
 
-/**
- * @brief  获取电机里程 (转数)
- */
-float Motor_GetRevolutions(MotorID_t id)
-{
-    return (float)Motor_GetEncoderCount(id) / (float)PULSE_PER_REV;
-}
-
-/**
- * @brief  复位编码器
- */
 void Motor_ResetEncoder(MotorID_t id)
 {
     Motor_t *m = &g_motors[id];
-    if (!m->initialized || !m->htim_enc) return;
-    __HAL_TIM_SET_COUNTER(m->htim_enc, 0);
-    m->encoder_count = 0;
+    if (m->htim_enc) __HAL_TIM_SET_COUNTER(m->htim_enc, 0);
+    m->enc_delta = 0;
     m->encoder_prev = 0;
 }
 
 /**
- * @brief  检查是否到达目标转速
- */
-bool Motor_IsSpeedReached(MotorID_t id, float tolerance_rpm)
-{
-    Motor_t *m = &g_motors[id];
-    if (!m->initialized) return true;
-    return (fabsf(m->current_rpm - m->target_rpm) <= tolerance_rpm);
-}
-
-/**
- * @brief  PID 调速更新 (周期调用, 例如 1kHz)
+ * @brief  PID速度更新 (每1ms调用)
+ *
+ * RPM计算: delta脉冲 / 120000脉冲每转 * 60000ms/min = delta / 2
+ * (120000 / 60000 = 2, 所以 RPM = delta * 0.5)
  */
 void Motor_PIDUpdate(void)
 {
     for (int i = 0; i < MOTOR_NUM; i++) {
         Motor_t *m = &g_motors[i];
-        if (!m->initialized) continue;
+        if (!m->htim_ch1) continue;
 
-        /* 计算当前转速 (RPM) */
-        int32_t enc_current = Motor_GetEncoderCount((MotorID_t)i);
-        int32_t enc_diff = enc_current - m->encoder_prev;
-        m->encoder_prev = enc_current;
-        m->encoder_count = enc_current;
+        int16_t delta = Motor_GetEncoderDelta((MotorID_t)i);
+        /* RPM = delta / 120000 * 60000 = delta / 2 */
+        m->current_rpm = (float)delta * 0.5f;
 
-        /* 转速 = Δ脉冲 / PPR / 减速比 / dt * 60 */
-        /* enc_diff 是 1ms 内的脉冲差 → RPM = enc_diff/(PULSE_PER_REV)*60*1000 */
-        m->current_rpm = (float)enc_diff / (float)PULSE_PER_REV * 60000.0f;
+        float err = m->target_rpm - m->current_rpm;
+        float duty = PID_Update(&m->pid, m->current_rpm);
 
-        /* 处理方向: 根据目标转速符号确定方向 */
-        if (m->target_rpm < 0) {
-            Motor_SetDirection((MotorID_t)i, MOTOR_DIR_BACKWARD);
-            PID_SetTarget(&m->pid, -m->target_rpm);
-        } else {
-            Motor_SetDirection((MotorID_t)i, MOTOR_DIR_FORWARD);
-            PID_SetTarget(&m->pid, m->target_rpm);
-        }
-
-        /* PID 计算 */
-        float duty = PID_Update(&m->pid, fabsf(m->current_rpm));
-
-        /* 应用 PWM */
         if (fabsf(m->target_rpm) < 0.5f) {
-            Motor_SetDuty((MotorID_t)i, 0.0f);
+            Motor_SetDuty((MotorID_t)i, 0);
         } else {
             Motor_SetDuty((MotorID_t)i, duty);
         }

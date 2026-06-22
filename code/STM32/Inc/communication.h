@@ -10,6 +10,9 @@
 #include "pin_config.h"
 #include "protocol.h"
 
+/* 通信帧就绪标志 (供 Task_Comm 使用) */
+extern volatile bool g_frame_ready;
+
 /* 通信超时 */
 #define COMM_TIMEOUT_MS         5000
 
