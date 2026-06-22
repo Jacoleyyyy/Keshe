@@ -37,6 +37,7 @@ Keshe/
         ├── config.py
         ├── qr_detector.py
         ├── color_detector.py
+        ├── lane_detector.py     ← 🆕 灰色车道检测 (防出界备选)
         ├── comm.py
         ├── main.py
         └── README.md         ← MaixPy v4 API 速查
@@ -108,6 +109,7 @@ make flash      # 烧录
 | RTOS | FreeRTOS v10 (CMSIS OS v2) |
 | 语言 (MCU) | C11 (Keil ARMCC + ARM GCC) |
 | 视觉 | MaixCAM Pro + **MaixPy v4** (`maix.camera/maix.image`) |
+| 车道保持 | 🆕 MaixCAM 视觉车道检测 (灰色 LAB 阈值) + 5路灰度 (双重保障) |
 | 电机驱动 | 双通道PWM (TIM1/TIM9/TIM10/TIM11 @ 10kHz) |
 | 编码器 | GMR 500PPR × 4 倍频 (TIM2/3/4/5) |
 | 舵机 | TIM8 4通道 100Hz |
@@ -134,6 +136,8 @@ make flash      # 烧录
 | **编码器精度** | **500 PPR** | ×4倍频 = 2000 CPR |
 | **脉冲/轮转** | **120,000** | 500×4×60 |
 | **半轮距/半轴距** | **93 / 85 mm** | 麦轮运动学参数 |
+| 🆕 车道偏移告警 | 80 mm | 视觉车道检测偏移阈值 |
+| 🆕 车道掉线判定 | 150 mm | 超过此偏移视为出界 |
 
 ---
 
@@ -142,7 +146,8 @@ make flash      # 烧录
 - 🔥 **[新手入门教程](教程-从零开始.md)** — 零基础必看！安装→配置→调试全程带飞
 - 🏁 [竞赛规则](rr.md) — 评分标准、场地规格、物料编码
 - 📖 [完整项目文档](CLAUDE.md) — 架构设计、API、配置速查表
-- 📸 [MaixPy v4 API 速查](code/MaixCAM/README.md) — 视觉 API + 颜色阈值标定
+- 📸 [MaixPy v4 API 速查](code/MaixCAM/README.md) — 视觉 API + 颜色阈值标定 + 车道检测协议
+- 🛣️ [车道检测模块](code/MaixCAM/lane_detector.py) — 灰色车道视觉检测 (防出界备选方案)
 - 🔬 [VSCode 调试指南](code/STM32/VSCode调试指南.md) — 从 Keil5 迁移到 VSCode
 - 🔌 [引脚定义](code/STM32/Inc/pin_config.h) — 硬件连接 (WHEELTEC C30D GMR版)
 - 📡 [通信协议](code/STM32/Inc/protocol.h) — STM32 ↔ MaixCAM 帧协议
