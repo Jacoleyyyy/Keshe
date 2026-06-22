@@ -39,8 +39,19 @@ qrs = img.find_qrcodes()
 
 | 文件 | 功能 |
 |------|------|
-| `config.py` | 相机/UART/颜色阈值/检测参数 |
+| `config.py` | 相机/UART/颜色阈值/车道检测参数 |
 | `qr_detector.py` | QR码检测 (maix.image.Image.find_qrcodes) |
 | `color_detector.py` | LAB颜色分割 + 物料定位 + 像素→世界坐标 |
+| `lane_detector.py` | 灰色车道检测 (备选, 视觉车道保持防出界) |
 | `comm.py` | UART帧协议: CMD:/RSP: |
-| `main.py` | 主循环: 命令分发 + 多帧检测 |
+| `main.py` | 主循环: 命令分发 + 多帧检测 + 车道查询 |
+
+## 车道检测协议
+
+```
+STM32 发送:  CMD:CHECK_LANE\r\n
+MaixCAM 回复: RSP:LANE,<offset_mm>,<on_lane>\r\n
+
+offset_mm: 车道中心偏移 (mm), 正=偏右, 负=偏左
+on_lane:   1=在车道上, 0=掉线
+```

@@ -18,12 +18,13 @@
 typedef enum {
     CMD_SCAN_QR = 0x01, CMD_DETECT_COLOR = 0x02, CMD_FIND_MATERIAL = 0x03,
     CMD_CHECK_ZONE = 0x04, CMD_HEARTBEAT = 0x05, CMD_READY = 0x06,
+    CMD_CHECK_LANE = 0x07,
 } MaixCommand_t;
 
 typedef enum {
     RSP_QR_CODE = 0x10, RSP_COLOR_RESULT = 0x11, RSP_MAT_POS = 0x12,
     RSP_ZONE_INFO = 0x13, RSP_ACK = 0x14, RSP_ERROR = 0x15,
-    RSP_READY_OK = 0x16, RSP_DONE = 0x17,
+    RSP_READY_OK = 0x16, RSP_DONE = 0x17, RSP_LANE_DATA = 0x18,
 } MaixResponse_t;
 
 /* ============================================================
@@ -48,6 +49,11 @@ typedef struct {
     int16_t x_mm, y_mm;
     MaterialColor_t color;
 } ZoneInfo_t;
+
+typedef struct {
+    int16_t offset_mm;          /* 车道中心偏移 (mm), + = 偏右 */
+    bool on_lane;               /* 是否在车道上 */
+} LaneInfo_t;
 
 typedef enum {
     STATE_IDLE = 0, STATE_WAIT_MAIX_READY, STATE_MOVE_TO_QR,
@@ -97,6 +103,9 @@ typedef enum {
 #define OBSTACLE_DISTANCE_MM    200
 #define SAFE_DISTANCE_MM        150
 
+#define LANE_WARN_OFFSET_MM     80      /* 车道偏移告警阈值 */
+#define LANE_LOST_OFFSET_MM     150     /* 车道掉线判定阈值 */
+
 #define MOTOR_MAX_RPM           300.0f
 
 /* 状态名称字符串 */
@@ -118,12 +127,14 @@ static const char* MAIX_CMD_STR[] = {
     [CMD_SCAN_QR] = "SCAN_QR", [CMD_DETECT_COLOR] = "DETECT_COLOR",
     [CMD_FIND_MATERIAL] = "FIND_MATERIAL", [CMD_CHECK_ZONE] = "CHECK_ZONE",
     [CMD_HEARTBEAT] = "HEARTBEAT", [CMD_READY] = "READY",
+    [CMD_CHECK_LANE] = "CHECK_LANE",
 };
 static const char* MAIX_RSP_STR[] = {
     [RSP_QR_CODE - 0x10] = "QR", [RSP_COLOR_RESULT - 0x10] = "COLOR",
     [RSP_MAT_POS - 0x10] = "MAT", [RSP_ZONE_INFO - 0x10] = "ZONE",
     [RSP_ACK - 0x10] = "ACK", [RSP_ERROR - 0x10] = "ERR",
     [RSP_READY_OK - 0x10] = "READY", [RSP_DONE - 0x10] = "DONE",
+    [RSP_LANE_DATA - 0x10] = "LANE",
 };
 
 #endif /* __PROTOCOL_H */

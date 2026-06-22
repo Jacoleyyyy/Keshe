@@ -52,10 +52,11 @@ f:\KeShe\
     │   ├── Makefile               #   ARM GCC 编译脚本
     │   └── VSCode调试指南.md       #   VSCode 调试完整教程
     │
-    └── MaixCAM/                   ← 视觉子系统 — QR检测、颜色识别、物料定位
-        ├── config.py              #   相机/UART/颜色阈值参数
+    └── MaixCAM/                   ← 视觉子系统 — QR检测、颜色识别、车道检测
+        ├── config.py              #   相机/UART/颜色/车道阈值参数
         ├── qr_detector.py         #   QR码检测 (多帧稳定+编码校验)
         ├── color_detector.py      #   LAB色彩分割 / 物料定位 / 色环检测
+        ├── lane_detector.py       #   灰色车道检测 (备选, 防出界)
         ├── comm.py                #   UART 协议通信
         └── main.py                #   主循环 (命令分发+多帧检测)
 ```

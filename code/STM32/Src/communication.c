@@ -206,6 +206,34 @@ CommError_t Communication_CheckZone(MaterialColor_t c, ZoneInfo_t *z, uint32_t t
     return COMM_ERR_TIMEOUT;
 }
 
+CommError_t Communication_CheckLane(LaneInfo_t *lane, uint32_t timeout_ms)
+{
+    Communication_SendCommand(CMD_CHECK_LANE);
+
+    MaixResponse_t rsp;
+    char data[64];
+    uint32_t start = HAL_GetTick();
+
+    while ((HAL_GetTick() - start) < timeout_ms) {
+        if (Communication_HasResponse()) {
+            uint16_t len;
+            CommError_t err = (CommError_t)Communication_ParseResponse(&rsp, data, &len);
+            if (err == COMM_OK && rsp == RSP_LANE_DATA) {
+                /* 解析 "offset_mm,on_lane" */
+                int off, on;
+                if (sscanf(data, "%d,%d", &off, &on) >= 1) {
+                    lane->offset_mm = (int16_t)off;
+                    lane->on_lane   = (on != 0);
+                    return COMM_OK;
+                }
+            }
+        }
+        osDelay(5);
+    }
+
+    return COMM_ERR_TIMEOUT;
+}
+
 bool Communication_IsHealthy(void)
 {
     return (g_huart != NULL);

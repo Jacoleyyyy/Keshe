@@ -18,9 +18,23 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+
+/* ============================================================
+ * 视觉车道检测 — 备选项
+ *
+ *   设为 1: 启用 MaixCAM 视觉车道检测 (配合灰度传感器, 双重保障)
+ *   设为 0: 仅用 5 路灰度传感器
+ *
+ *   视觉优势: 分辨率高, 可提前预判偏离, 不受地面污渍干扰
+ * ============================================================ */
+#define USE_VISION_LANE  1
 
 /* 全局系统上下文 */
 SystemContext_t g_sys;
+
+/* 视觉车道检测数据 (由 Task_Sensor 更新) */
+LaneInfo_t g_lane;
 
 /* FreeRTOS 任务句柄 */
 osThreadId_t g_task_handle_manager   = NULL;
@@ -147,6 +161,76 @@ static const char* color_name(MaterialColor_t c)
  *   Step 6: 搬运物料3到暂存区码垛
  *   Step 7: 返回启停区
  * ============================================================ */
+/* ============================================================
+ * 带车道保持的导航辅助函数
+ *
+ * 在长途行驶时使用视觉+灰度双重车道保持,
+ * 接近目标 (<300mm) 时切换到纯点对点导航
+ * ============================================================ */
+static bool NavigateWithLane(float tx, float ty, float tyaw, float speed)
+{
+    /* 先判断距离 */
+    Pose2D_t pose = Chassis_GetPose();
+    float dx = tx - pose.x_mm;
+    float dy = ty - pose.y_mm;
+    float dist = sqrtf(dx * dx + dy * dy);
+
+    /* 近距离: 纯点对点导航 (不依赖车道线) */
+    if (dist < 300.0f) {
+        return Chassis_NavigateTo(tx, ty, tyaw, speed);
+    }
+
+    /* 长途: 使用混合车道跟随 + 导航引导 */
+    float target_angle = atan2f(dy, dx) * 180.0f / (float)M_PI;
+    float angle_err = target_angle - pose.yaw_deg;
+    while (angle_err > 180.0f) angle_err -= 360.0f;
+    while (angle_err < -180.0f) angle_err += 360.0f;
+
+    /* 方向偏离大时先转弯 */
+    if (fabsf(angle_err) > 30.0f) {
+        float rot = (angle_err > 0) ? 45.0f : -45.0f;
+        Chassis_SetVelocity(0, 0, rot);
+        return false;
+    }
+
+    /* 使用混合车道跟随 (视觉优先, 灰度降级) */
+    LaneInfo_t lane;
+    osMutexAcquire(g_sys.mutex_pose, osWaitForever);
+    lane = g_lane;
+    osMutexRelease(g_sys.mutex_pose);
+
+    float effective_speed = speed;
+
+    /* 大偏移时自动减速 */
+    if (lane.on_lane && abs(lane.offset_mm) > LANE_WARN_OFFSET_MM)
+        effective_speed = speed * 0.5f;
+
+    /* 角度引导修正: 让纵向速度向目标方向倾斜 */
+    float vx_nav = sinf(angle_err * (float)M_PI / 180.0f) * effective_speed * 0.3f;
+
+#if USE_VISION_LANE
+    if (lane.on_lane) {
+        /* 车道修正: 与导航引导合并 */
+        float vx_lane = -(float)lane.offset_mm * 2.5f;
+        if (vx_lane > 120.0f) vx_lane = 120.0f;
+        if (vx_lane < -120.0f) vx_lane = -120.0f;
+        /* 视觉权重 0.7, 导航权重 0.3 */
+        Chassis_SetVelocity(vx_lane * 0.7f + vx_nav * 0.3f,
+                            effective_speed,
+                            -(float)lane.offset_mm * 0.8f);
+    } else
+#endif
+    {
+        /* 视觉不可用: 纯导航 */
+        Chassis_SetVelocity(vx_nav, effective_speed, angle_err * 2.0f);
+    }
+
+    return false;
+}
+
+/* ============================================================
+ * 主任务
+ * ============================================================ */
 void Task_Manager(void *argument)
 {
     (void)argument;
@@ -195,7 +279,7 @@ void Task_Manager(void *argument)
                 /* 导航到二维码位置 */
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(QR_X_MM, QR_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(QR_X_MM, QR_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -246,7 +330,7 @@ void Task_Manager(void *argument)
             {
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(RAW_AREA_X_MM, RAW_AREA_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(RAW_AREA_X_MM, RAW_AREA_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -338,7 +422,7 @@ void Task_Manager(void *argument)
 
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(zone_x, zone_y, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(zone_x, zone_y, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -430,7 +514,7 @@ void Task_Manager(void *argument)
 
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(zone_x, zone_y, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(zone_x, zone_y, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -476,7 +560,7 @@ void Task_Manager(void *argument)
             {
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(TEMP_AREA_X_MM, TEMP_AREA_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(TEMP_AREA_X_MM, TEMP_AREA_Y_MM, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -570,7 +654,7 @@ void Task_Manager(void *argument)
                 /* 回到坐标原点 (启停区中心) */
                 bool arrived = false;
                 while (!arrived) {
-                    arrived = Chassis_NavigateTo(0.0f, 0.0f, 0.0f, DEFAULT_SPEED_MM_S);
+                    arrived = NavigateWithLane(0.0f, 0.0f, 0.0f, DEFAULT_SPEED_MM_S);
                     Chassis_UpdateOdometry();
                     osDelay(10);
                 }
@@ -770,6 +854,7 @@ void Task_Sensor(void *argument)
 
     GraySensor_t gray;
     Ultrasonic_t us;
+    uint32_t last_lane_query = 0;
 
     for (;;) {
         /* 读取灰度传感器 */
@@ -790,6 +875,31 @@ void Task_Sensor(void *argument)
             };
             /* 高优先级告警 */
         }
+
+#if USE_VISION_LANE
+        /* 视觉车道检测 (5Hz = 每200ms查询一次) */
+        uint32_t now = osKernelGetTickCount();
+        if ((now - last_lane_query) >= 200) {
+            SystemState_t st = TaskManager_GetState();
+            /* 仅在运动状态时查询, 避免干扰其他命令 */
+            if (st >= STATE_MOVE_TO_QR && st <= STATE_RETURN_START) {
+                LaneInfo_t lane;
+                CommError_t err = Communication_CheckLane(&lane, 50);
+                if (err == COMM_OK) {
+                    osMutexAcquire(g_sys.mutex_pose, osWaitForever);
+                    g_lane = lane;
+                    osMutexRelease(g_sys.mutex_pose);
+                } else {
+                    /* 通信失败: 标记掉线 */
+                    osMutexAcquire(g_sys.mutex_pose, osWaitForever);
+                    g_lane.on_lane = false;
+                    g_lane.offset_mm = 0;
+                    osMutexRelease(g_sys.mutex_pose);
+                }
+            }
+            last_lane_query = now;
+        }
+#endif
 
         osDelay(20);  /* 50Hz 更新率 */
     }

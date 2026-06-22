@@ -40,4 +40,17 @@ void Chassis_ResetOdometry(void);
 void Chassis_LaneFollow(const GraySensor_t *gray, float forward_speed);
 void Chassis_ApplyMotorRPM(const float rpm[4]);
 
+/**
+ * @brief  视觉车道跟随 (基于 MaixCAM 车道检测结果)
+ * @param  lane          车道检测信息
+ * @param  forward_speed 前进速度 (mm/s)
+ */
+void Chassis_VisionLaneFollow(const LaneInfo_t *lane, float forward_speed);
+
+/**
+ * @brief  混合车道跟随 (灰度传感器 + 视觉, 视觉优先)
+ */
+void Chassis_HybridLaneFollow(const GraySensor_t *gray, const LaneInfo_t *lane,
+                              float forward_speed);
+
 #endif

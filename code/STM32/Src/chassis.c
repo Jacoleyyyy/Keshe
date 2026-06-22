@@ -177,3 +177,58 @@ void Chassis_LaneFollow(const GraySensor_t *gray, float fwd)
     if (!gray->on_line || off < -80 || off > 80) fwd *= 0.3f;
     Chassis_SetVelocity(-vx, fwd, -(float)off * 1.5f);
 }
+
+/**
+ * @brief  视觉车道跟随 (基于 MaixCAM 车道检测)
+ *
+ * offset_mm: 正值 = 车道在右侧 (机器人偏左) → 需要右移修正
+ *            负值 = 车道在左侧 (机器人偏右) → 需要左移修正
+ */
+void Chassis_VisionLaneFollow(const LaneInfo_t *lane, float fwd)
+{
+    if (!lane || !lane->on_lane) {
+        /* 掉线: 减速并停止横向修正 */
+        fwd *= 0.2f;
+        Chassis_SetVelocity(0, fwd, 0);
+        return;
+    }
+
+    /* 比例修正: 1mm偏移 ≈ 2mm/s横向修正 */
+    float kp = 2.5f;
+    float vx = (float)lane->offset_mm * kp;
+
+    /* 限幅 */
+    if (vx > 120.0f) vx = 120.0f;
+    if (vx < -120.0f) vx = -120.0f;
+
+    /* 大偏移时减速 */
+    if (fabsf((float)lane->offset_mm) > LANE_WARN_OFFSET_MM)
+        fwd *= 0.5f;
+
+    /* 角度修正 */
+    float wz = (float)lane->offset_mm * 0.8f;
+    if (wz > 30.0f) wz = 30.0f;
+    if (wz < -30.0f) wz = -30.0f;
+
+    Chassis_SetVelocity(-vx, fwd, -wz);
+}
+
+/**
+ * @brief  混合车道跟随 (视觉优先, 灰度传感器降级)
+ *
+ * 优先使用 MaixCAM 视觉 (分辨率高), 视觉不可用时降级到灰度传感器
+ */
+void Chassis_HybridLaneFollow(const GraySensor_t *gray, const LaneInfo_t *lane,
+                              float fwd)
+{
+    if (lane && lane->on_lane) {
+        /* 视觉可用 → 优先使用 */
+        Chassis_VisionLaneFollow(lane, fwd);
+    } else if (gray && gray->on_line) {
+        /* 视觉不可用 → 降级到灰度传感器 */
+        Chassis_LaneFollow(gray, fwd);
+    } else {
+        /* 全部不可用 → 减速直行 */
+        Chassis_SetVelocity(0, fwd * 0.15f, 0);
+    }
+}

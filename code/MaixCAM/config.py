@@ -28,6 +28,7 @@ CMD_SCAN_QR       = "SCAN_QR"
 CMD_DETECT_COLOR  = "DETECT_COLOR"
 CMD_FIND_MATERIAL = "FIND_MATERIAL"
 CMD_CHECK_ZONE    = "CHECK_ZONE"
+CMD_CHECK_LANE    = "CHECK_LANE"
 CMD_HEARTBEAT     = "HEARTBEAT"
 CMD_READY         = "READY"
 
@@ -35,6 +36,7 @@ RSP_QR_CODE       = "QR"
 RSP_COLOR_RESULT  = "COLOR"
 RSP_MAT_POS       = "MAT"
 RSP_ZONE_INFO     = "ZONE"
+RSP_LANE_DATA     = "LANE"
 RSP_ACK           = "ACK"
 RSP_ERROR         = "ERR"
 RSP_READY_OK      = "READY"
@@ -71,6 +73,28 @@ MATERIAL_MAX_AREA    = 10000  # 最大面积
 # QR二维码检测参数
 # ============================================================
 QR_EXPECTED_LEN      = 3      # 期望三位数字编码
+
+# ============================================================
+# 车道检测参数 (灰色车道 vs 白色/黄色出界区域)
+#
+# 灰色车道: L 中等亮度, A/B 低饱和度
+# 白色区域: L 很高 (>80)
+# 黄色区域: L 高, B 正值
+#
+# 需要根据实际场地光照标定!
+# ============================================================
+
+# 灰色车道 LAB 阈值
+GREY_LANE_THRESHOLD = [30, 75, -25, 25, -25, 25]
+
+# 车道检测区域: 图像下半部分
+LANE_ROI_Y_START    = 120      # ROI起始行 (0.5 * 240)
+LANE_MIN_AREA       = 500      # 车道最小面积 (像素)
+LANE_MIN_PIXELS     = 500      # 最小有效像素数
+
+# 车道偏移告警阈值
+LANE_WARN_OFFSET_MM = 80       # 偏移超过此值发出告警
+LANE_LOST_OFFSET_MM = 150      # 偏移超过此值认为掉线
 
 # ============================================================
 # 系统参数

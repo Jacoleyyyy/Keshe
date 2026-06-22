@@ -18,6 +18,7 @@ from maix import camera, image, display, app
 from config import *
 from qr_detector import QRDetector
 from color_detector import ColorDetector
+from lane_detector import LaneDetector
 from comm import MaixComm
 
 
@@ -27,8 +28,9 @@ from comm import MaixComm
 cam  = None        # camera.Camera
 disp = None        # display.Display
 comm = None        # MaixComm
-qr_detector = None # QRDetector
-color_detector = None  # ColorDetector
+qr_detector = None      # QRDetector
+color_detector = None   # ColorDetector
+lane_detector = None    # LaneDetector
 
 
 # ============================================================
@@ -36,7 +38,7 @@ color_detector = None  # ColorDetector
 # ============================================================
 def init_all() -> bool:
     """初始化全部模块, 返回 True=成功"""
-    global cam, disp, comm, qr_detector, color_detector
+    global cam, disp, comm, qr_detector, color_detector, lane_detector
 
     print("=" * 40)
     print("  Smart Carrier — MaixCAM Vision")
@@ -70,6 +72,7 @@ def init_all() -> bool:
     # 4. 检测器
     qr_detector = QRDetector()
     color_detector = ColorDetector()
+    lane_detector = LaneDetector()
     print("[OK] Detectors initialized")
 
     return True
@@ -200,6 +203,31 @@ def cmd_check_zone(params: str):
         show_img(img)
 
 
+def cmd_check_lane():
+    """处理 CHECK_LANE 命令 — 检测车道位置"""
+    img = cam.read()
+    result = lane_detector.check_lane(img)
+
+    if result and result.on_lane:
+        # LANE,<offset_mm>,<on_lane_flag>
+        comm.send_response(RSP_LANE_DATA,
+                           f"{result.offset_mm},1")
+        lane_detector.draw_overlay(img, result)
+        print(f"[CMD] CHECK_LANE: offset={result.offset_mm}mm")
+    elif result:
+        # 掉线但仍返回数据
+        comm.send_response(RSP_LANE_DATA,
+                           f"{result.offset_mm},0")
+        lane_detector.draw_overlay(img, result)
+        print(f"[CMD] CHECK_LANE: LOST offset={result.offset_mm}mm")
+    else:
+        comm.send_error("Lane detect failed")
+        img.draw_string(10, 10, "Lane detect failed",
+                        image.COLOR_RED, 2)
+
+    show_img(img)
+
+
 # ============================================================
 # 辅助
 # ============================================================
@@ -248,6 +276,9 @@ def main():
 
                 elif cmd == CMD_CHECK_ZONE:
                     cmd_check_zone(params)
+
+                elif cmd == CMD_CHECK_LANE:
+                    cmd_check_lane()
 
                 elif cmd == CMD_HEARTBEAT:
                     comm.send_ready()

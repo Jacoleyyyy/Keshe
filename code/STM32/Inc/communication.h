@@ -108,4 +108,12 @@ CommError_t Communication_FindMaterial(MaterialColor_t target, MaterialPos_t *po
 CommError_t Communication_CheckZone(MaterialColor_t color, ZoneInfo_t *zone,
                                      uint32_t timeout_ms);
 
+/**
+ * @brief  请求车道检测 (使用 MaixCAM 视觉)
+ * @param  lane       输出: 车道信息 (偏移量 + 是否在车道上)
+ * @param  timeout_ms 超时 (ms)
+ * @return COMM_OK 或错误码
+ */
+CommError_t Communication_CheckLane(LaneInfo_t *lane, uint32_t timeout_ms);
+
 #endif /* __COMMUNICATION_H */
