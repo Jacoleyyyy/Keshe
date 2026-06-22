@@ -4,7 +4,8 @@
 > **GitHub**：https://github.com/Jacoleyyyy/Keshe  
 > **硬件平台**：轮趣科技麦轮小车 + 矽速科技 MaixCAM Pro  
 > **MCU**：STM32F407 (Cortex-M4, 168MHz)  
-> **RTOS**：FreeRTOS (CMSIS OS v2)
+> **RTOS**：FreeRTOS (CMSIS OS v2)  
+> **硬件版本**：WHEELTEC C30D 2.0 GMR编码器版 (75mm轮/60:1/500PPR)
 
 ---
 

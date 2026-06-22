@@ -1,333 +1,279 @@
 """
-main.py - MaixCAM Pro 主程序
+main.py — MaixCAM Pro 视觉系统主程序 (MaixPy v4)
 
-智能搬运机器人视觉系统主循环
+智能搬运机器人视觉子系统
+功能: QR码读取 / 颜色识别 / 物料定位 / 色环检测
 
-流程:
-  1. 初始化相机、显示、UART通信
-  2. 进入主循环:
-     - 读取 STM32 命令
-     - 根据命令类型执行对应视觉任务
-     - 返回处理结果
+运行环境: MaixCAM Pro + MaixPy v4.x
+API: maix.camera / maix.image / maix.display / machine.UART
 
-运行环境: MaixPy (MicroPython on MaixCAM Pro)
+启动方式:
+  1. 将此文件复制到 MaixCAM U盘根目录
+  2. 或在 MaixPy IDE 中直接运行
+  3. 上电自动执行 main.py
 """
 
 import time
-import sensor
-import image
-import lcd
-from machine import UART
-
+from maix import camera, image, display, app
 from config import *
 from qr_detector import QRDetector
 from color_detector import ColorDetector
 from comm import MaixComm
 
+
+# ============================================================
+# 全局对象
+# ============================================================
+cam  = None        # camera.Camera
+disp = None        # display.Display
+comm = None        # MaixComm
+qr_detector = None # QRDetector
+color_detector = None  # ColorDetector
+
+
 # ============================================================
 # 初始化
 # ============================================================
+def init_all() -> bool:
+    """初始化全部模块, 返回 True=成功"""
+    global cam, disp, comm, qr_detector, color_detector
 
-def init_camera():
-    """初始化相机"""
-    print("[MaixCAM] Initializing camera...")
+    print("=" * 40)
+    print("  Smart Carrier — MaixCAM Vision")
+    print("=" * 40)
+
+    # 1. 相机
     try:
-        sensor.reset()
-        sensor.set_pixformat(sensor.RGB565)
-        sensor.set_framesize(sensor.QVGA)  # 320x240
-        sensor.set_vflip(True)              # 垂直翻转 (根据安装方向调整)
-        sensor.set_hmirror(False)           # 水平镜像
-        sensor.skip_frames(time=2000)       # 等待相机稳定
-
-        # 自动设置
-        sensor.set_auto_gain(True)
-        sensor.set_auto_whitebal(True)
-        sensor.set_auto_exposure(True)
-
-        print("[MaixCAM] Camera initialized OK")
-        return True
+        cam = camera.Camera(CAMERA_WIDTH, CAMERA_HEIGHT)
+        print(f"[OK] Camera: {CAMERA_WIDTH}x{CAMERA_HEIGHT}")
     except Exception as e:
-        print(f"[MaixCAM] Camera init error: {e}")
+        print(f"[FAIL] Camera: {e}")
         return False
 
-
-def init_display():
-    """初始化LCD显示"""
+    # 2. 显示屏
     try:
-        lcd.init()
-        lcd.rotation(2)  # 根据安装方向调整
-        lcd.clear()
-        lcd.draw_string(10, 10, "Smart Carrier Vision", lcd.WHITE, lcd.BLACK)
-        lcd.draw_string(10, 30, "Initializing...", lcd.WHITE, lcd.BLACK)
-        print("[MaixCAM] Display initialized OK")
-        return True
+        disp = display.Display()
+        disp.show(cam.read())  # 测试显示
+        print("[OK] Display")
     except Exception as e:
-        print(f"[MaixCAM] Display init error: {e}")
+        print(f"[WARN] Display: {e}")
+        disp = None
+
+    # 3. UART 通信
+    try:
+        comm = MaixComm(port=UART_PORT, baudrate=UART_BAUDRATE)
+        print(f"[OK] UART: port={UART_PORT}, baud={UART_BAUDRATE}")
+    except Exception as e:
+        print(f"[FAIL] UART: {e}")
         return False
 
+    # 4. 检测器
+    qr_detector = QRDetector()
+    color_detector = ColorDetector()
+    print("[OK] Detectors initialized")
 
-def init_comm():
-    """初始化UART通信"""
-    comm = MaixComm(port=UART_PORT, baudrate=UART_BAUDRATE)
-    print(f"[MaixCAM] UART init: port={UART_PORT}, baud={UART_BAUDRATE}")
-    return comm
+    return True
 
 
 # ============================================================
-# 命令处理
+# 命令处理函数
 # ============================================================
 
-def handle_scan_qr(img, qr_detector, comm):
-    """
-    处理 SCAN_QR 命令
-
-    流程:
-      1. 连续多帧扫描 QR 码
-      2. 检测成功后返回编码
-      3. 超时后返回错误
-    """
-    print("[MaixCAM] Scanning QR...")
+def cmd_scan_qr(timeout_ms=3000):
+    """处理 SCAN_QR 命令"""
+    print("[CMD] SCAN_QR")
     qr_detector.reset()
 
-    timeout_ms = 3000
-    start_time = time.ticks_ms()
-
-    while time.ticks_diff(time.ticks_ms(), start_time) < timeout_ms:
-        img = sensor.snapshot()
+    start = time.ticks_ms()
+    while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
+        img = cam.read()
         code = qr_detector.scan(img)
 
         if code:
-            # 绘制检测结果
-            qr_detector.draw_qr_overlay(img, code)
-            lcd.display(img)
-
-            # 发送结果
+            qr_detector.draw_overlay(img, code)
+            show_img(img)
             comm.send_qr_code(code)
-            print(f"[MaixCAM] QR detected: {code}")
+            print(f"  -> QR: {code}")
             return
 
-        # 显示扫描状态
-        img.draw_string(10, 10, "Scanning QR...", color=(255, 255, 0), scale=2)
-        lcd.display(img)
+        # 显示扫描中
+        img.draw_string(10, 10, "Scanning QR...",
+                        image.COLOR_YELLOW, 2)
+        show_img(img)
         time.sleep_ms(50)
 
     # 超时
-    print("[MaixCAM] QR scan timeout")
+    print("  -> timeout")
     comm.send_error("QR timeout")
 
 
-def handle_detect_color(img, color_detector, comm):
-    """
-    处理 DETECT_COLOR 命令
+def cmd_detect_color():
+    """处理 DETECT_COLOR 命令"""
+    print("[CMD] DETECT_COLOR")
+    img = cam.read()
+    c = color_detector.detect_color(img)
+    name = color_detector.COLOR_NAMES.get(c, "UNKNOWN")
 
-    检测当前相机视野中的主要颜色
-    """
-    print("[MaixCAM] Detecting color...")
-
-    color = color_detector.detect_color(img)
-    color_name = color_detector.COLOR_NAMES.get(color, "UNKNOWN")
-
-    if color > 0:
-        comm.send_color_result(255, 255, 255, color_name)
-        print(f"[MaixCAM] Color detected: {color_name}")
+    if c > 0:
+        # 协议格式: COLOR,<r>,<g>,<b>,<name>
+        comm.send_response(RSP_COLOR_RESULT, f"0,0,0,{name}")
+        print(f"  -> {name}")
     else:
         comm.send_error("No color detected")
+        print("  -> no color")
 
-    # 显示结果
-    color_detector.draw_material_overlay(img, None, color_name)
-    lcd.display(img)
+    img.draw_string(10, 10, f"Color: {name}",
+                    image.COLOR_GREEN, 2)
+    show_img(img)
 
 
-def handle_find_material(img, target_color, color_detector, comm):
+def cmd_find_material(params: str):
+    """处理 FIND_MATERIAL 命令
+
+    params: 目标颜色代码 "1"/"2"/"3"
     """
-    处理 FIND_MATERIAL 命令
+    try:
+        target = int(params) if params else 1
+    except ValueError:
+        target = 1
 
-    在视野中寻找指定颜色的物料并定位
+    name = color_detector.COLOR_NAMES.get(target, "???")
+    print(f"[CMD] FIND_MATERIAL color={target} ({name})")
 
-    Args:
-        target_color: 目标颜色代码 (1=红, 2=绿, 3=蓝)
-    """
-    print(f"[MaixCAM] Finding material: color={target_color}")
-
-    # 多帧检测以提高稳定性
-    best_result = None
+    # 多帧检测取最佳
+    best = None
     best_area = 0
 
-    for _ in range(5):  # 5帧检测
-        img = sensor.snapshot()
-        result = color_detector.find_material(img, target_color)
-
-        if result:
-            x, y, area, angle = result
+    for _ in range(5):
+        img = cam.read()
+        r = color_detector.find_material(img, target)
+        if r:
+            _, _, area, _ = r
             if area > best_area:
                 best_area = area
-                best_result = result
-
+                best = r
         time.sleep_ms(30)
 
-    if best_result:
-        x, y, area, angle = best_result
-        # 像素坐标 → 世界坐标
-        x_mm, y_mm = color_detector.pixel_to_world(x, y)
+    if best:
+        cx, cy, area, rotation = best
+        x_mm, y_mm = color_detector.pixel_to_world(cx, cy)
+        comm.send_material_pos(x_mm, y_mm, target, int(rotation))
+        print(f"  -> pos=({x_mm},{y_mm})mm angle={rotation:.0f}")
 
-        comm.send_material_pos(x_mm, y_mm, target_color, int(angle))
-
-        color_name = color_detector.COLOR_NAMES.get(target_color, "???")
-        print(f"[MaixCAM] Material found: ({x_mm},{y_mm})mm, {color_name}, angle={angle:.0f}")
-
-        # 显示
-        color_detector.draw_material_overlay(img, best_result, color_name)
-        img.draw_string(10, 10, f"Found {color_name}", color=(0, 255, 0), scale=2)
-        lcd.display(img)
+        color_detector.draw_material_overlay(img, best, name)
+        img.draw_string(10, 10, f"Found {name}", image.COLOR_GREEN, 2)
+        show_img(img)
     else:
-        print(f"[MaixCAM] Material not found")
+        print("  -> not found")
         comm.send_error("Material not found")
+        img.draw_string(10, 10, "Not found", image.COLOR_RED, 2)
+        show_img(img)
 
-        img.draw_string(10, 10, "Material not found", color=(255, 0, 0), scale=2)
-        lcd.display(img)
 
+def cmd_check_zone(params: str):
+    """处理 CHECK_ZONE 命令"""
+    try:
+        target = int(params) if params else 1
+    except ValueError:
+        target = 1
 
-def handle_check_zone(img, target_color, color_detector, comm):
-    """
-    处理 CHECK_ZONE 命令
+    name = color_detector.COLOR_NAMES.get(target, "???")
+    print(f"[CMD] CHECK_ZONE color={target} ({name})")
 
-    检查放置区域的色环位置和颜色
-
-    Args:
-        target_color: 目标颜色代码
-    """
-    print(f"[MaixCAM] Checking zone: color={target_color}")
-
-    zone = color_detector.find_zone(img, target_color)
+    img = cam.read()
+    zone = color_detector.find_zone(img, target)
 
     if zone:
-        x, y, radius, ring_count = zone
-        x_mm, y_mm = color_detector.pixel_to_world(x, y)
+        cx, cy, radius, rings = zone
+        x_mm, y_mm = color_detector.pixel_to_world(cx, cy)
+        comm.send_zone_info(x_mm, y_mm, target)
+        print(f"  -> pos=({x_mm},{y_mm})mm rings={rings}")
 
-        comm.send_zone_info(x_mm, y_mm, target_color)
-
-        color_name = color_detector.COLOR_NAMES.get(target_color, "???")
-        print(f"[MaixCAM] Zone found: ({x_mm},{y_mm})mm, rings={ring_count}")
-
-        # 显示
-        color_detector.draw_zone_overlay(img, zone, color_name)
-        img.draw_string(10, 10, f"Zone {color_name} R={ring_count}",
-                       color=(0, 255, 0), scale=2)
-        lcd.display(img)
+        color_detector.draw_zone_overlay(img, zone, name)
+        img.draw_string(10, 10, f"Zone {name} R={rings}",
+                        image.COLOR_GREEN, 2)
+        show_img(img)
     else:
-        print("[MaixCAM] Zone not found")
+        print("  -> not found")
         comm.send_error("Zone not found")
+        img.draw_string(10, 10, "Zone not found", image.COLOR_RED, 2)
+        show_img(img)
 
-        img.draw_string(10, 10, "Zone not found", color=(255, 0, 0), scale=2)
-        lcd.display(img)
+
+# ============================================================
+# 辅助
+# ============================================================
+def show_img(img):
+    """显示图像 (如果 display 可用)"""
+    if disp:
+        disp.show(img)
 
 
 # ============================================================
 # 主循环
 # ============================================================
-
 def main():
-    """主函数"""
-
-    print("=" * 40)
-    print("  Smart Carrier - MaixCAM Vision System")
-    print("  智能搬运机器人 视觉系统")
-    print("=" * 40)
-
-    # 初始化各模块
-    if not init_camera():
-        print("Camera init failed! Halted.")
+    if not init_all():
+        print("Init failed! Check hardware.")
         return
 
-    if not init_display():
-        print("Display init failed! Continuing...")
-
-    comm = init_comm()
-
-    # 初始化检测器
-    qr_detector = QRDetector()
-    color_detector = ColorDetector()
-
-    # 发送就绪信号
+    # 发送就绪
     time.sleep_ms(500)
     comm.send_ready()
-    print("[MaixCAM] System ready. Waiting for commands...")
+    print("[INFO] System ready, waiting commands...")
 
-    # 显示就绪状态
-    try:
-        img = sensor.snapshot()
-        img.draw_string(10, 50, "Vision System Ready",
-                       color=(0, 255, 0), scale=2)
-        img.draw_string(10, 80, "Waiting for STM32...",
-                       color=(255, 255, 255), scale=1.5)
-        lcd.display(img)
-    except Exception:
-        pass
+    # 显示就绪画面
+    img = cam.read()
+    img.draw_string(10, 50, "Vision Ready",
+                    image.COLOR_GREEN, 2)
+    img.draw_string(10, 80, "Waiting STM32...",
+                    image.COLOR_WHITE, 1.5)
+    show_img(img)
 
-    # 主循环
-    while True:
+    # === 主循环 ===
+    while not app.need_exit():
         try:
-            # 获取相机图像
-            img = sensor.snapshot()
-
-            # 检查UART新命令
             if comm.update():
                 cmd, params = comm.get_command()
+                print(f"[RX] {cmd} | {params}")
 
-                print(f"[MaixCAM] Command received: {cmd}, params: {params}")
-
-                # 根据命令分发
                 if cmd == CMD_SCAN_QR:
-                    handle_scan_qr(img, qr_detector, comm)
+                    cmd_scan_qr()
 
                 elif cmd == CMD_DETECT_COLOR:
-                    handle_detect_color(img, color_detector, comm)
+                    cmd_detect_color()
 
                 elif cmd == CMD_FIND_MATERIAL:
-                    # 解析目标颜色参数
-                    try:
-                        target_color = int(params) if params else 1
-                    except ValueError:
-                        target_color = 1
-                    handle_find_material(img, target_color, color_detector, comm)
+                    cmd_find_material(params)
 
                 elif cmd == CMD_CHECK_ZONE:
-                    try:
-                        target_color = int(params) if params else 1
-                    except ValueError:
-                        target_color = 1
-                    handle_check_zone(img, target_color, color_detector, comm)
+                    cmd_check_zone(params)
 
                 elif cmd == CMD_HEARTBEAT:
                     comm.send_ready()
-                    print("[MaixCAM] Heartbeat ACK")
+                    comm.last_heartbeat = time.ticks_ms()
 
                 elif cmd == CMD_READY:
                     comm.send_ready()
 
                 else:
-                    print(f"[MaixCAM] Unknown command: {cmd}")
-                    comm.send_error(f"Unknown: {cmd}")
+                    print(f"[WARN] Unknown command: {cmd}")
+                    comm.send_error(f"Unknown:{cmd}")
 
             else:
-                # 无命令时的空闲显示
-                # 每500ms刷新一次显示
-                if time.ticks_ms() % 500 < 10:
-                    img.draw_string(10, 100, "Idle...",
-                                  color=(200, 200, 200), scale=1.5)
-                    lcd.display(img)
+                # 空闲: 降低 CPU
+                time.sleep_ms(10)
 
-            # 周期检查
+            # 心跳检查
             comm.check_heartbeat()
-            time.sleep_ms(10)
 
         except Exception as e:
-            print(f"[MaixCAM] Main loop error: {e}")
+            print(f"[ERR] Main loop: {e}")
             try:
-                comm.send_error(f"Internal: {str(e)}")
+                comm.send_error(f"Exception:{e}")
             except Exception:
                 pass
-            time.sleep_ms(100)
+            time.sleep_ms(200)
 
 
 # ============================================================

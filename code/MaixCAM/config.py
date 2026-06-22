@@ -1,32 +1,29 @@
 """
-config.py - MaixCAM Pro 视觉系统配置
+config.py — MaixCAM Pro 视觉系统配置 (MaixPy v4)
 
-智能搬运机器人视觉参数配置
+智能搬运机器人视觉参数
+适用: MaixCAM Pro + MaixPy v4.x
 """
 
 # ============================================================
 # 相机配置
 # ============================================================
-CAMERA_WIDTH    = 320       # 图像宽度
-CAMERA_HEIGHT   = 240       # 图像高度
-CAMERA_FPS      = 30        # 帧率
+CAMERA_WIDTH     = 320      # 图像宽度 (QVGA)
+CAMERA_HEIGHT    = 240      # 图像高度
+# Camera 在代码中创建: camera.Camera(CAMERA_WIDTH, CAMERA_HEIGHT)
 
 # ============================================================
 # UART 通信配置 (与 STM32 通信)
 # ============================================================
-UART_PORT        = 1        # UART1 (对应 MaixCAM 的串口1)
+UART_PORT        = 1        # UART1
 UART_BAUDRATE    = 115200
-UART_TX_PIN      = None     # 默认引脚
-UART_RX_PIN      = None     # 默认引脚
 
 # ============================================================
 # 协议常量
 # ============================================================
 CMD_PREFIX       = "CMD:"
 RSP_PREFIX       = "RSP:"
-FRAME_DELIMITER  = "\r\n"
 
-# 命令字
 CMD_SCAN_QR       = "SCAN_QR"
 CMD_DETECT_COLOR  = "DETECT_COLOR"
 CMD_FIND_MATERIAL = "FIND_MATERIAL"
@@ -34,7 +31,6 @@ CMD_CHECK_ZONE    = "CHECK_ZONE"
 CMD_HEARTBEAT     = "HEARTBEAT"
 CMD_READY         = "READY"
 
-# 响应字
 RSP_QR_CODE       = "QR"
 RSP_COLOR_RESULT  = "COLOR"
 RSP_MAT_POS       = "MAT"
@@ -45,44 +41,39 @@ RSP_READY_OK      = "READY"
 RSP_DONE          = "DONE"
 
 # ============================================================
-# 颜色阈值 (HSV/LAB 色彩空间)
-# 格式: (L_min, L_max, A_min, A_max, B_min, B_max)
-# 需要根据实际光照环境标定
+# LAB 颜色阈值 (MaixPy find_blobs 格式)
+# 格式: [L_min, L_max, A_min, A_max, B_min, B_max]
+#
+# L: 0=黑, 100=白  (亮度)
+# A: -128=绿, +127=红
+# B: -128=蓝, +127=黄
+#
+# 以下为参考值，必须根据实际光照用 MaixCAM 内置「找色块」应用标定!
 # ============================================================
 
-# 红色物料阈值
-# 红色在LAB空间有两个区域 (0°和360°附近)
-RED_THRESHOLD_1 = (0, 80, 20, 80, 10, 80)      # 红色区域1
-RED_THRESHOLD_2 = (0, 80, -80, -10, 10, 80)     # 红色区域2
+# 红色物料 (A通道正值)
+RED_THRESHOLD_1   = [0, 80, 40, 80, 10, 80]
 
-# 绿色物料阈值
-GREEN_THRESHOLD = (0, 80, -80, -20, -10, 20)
+# 绿色物料 (A通道负值)
+GREEN_THRESHOLD   = [0, 80, -120, -10, 0, 30]
 
-# 蓝色物料阈值
-BLUE_THRESHOLD  = (0, 60, -20, 30, -80, -20)
+# 蓝色物料 (B通道负值)
+BLUE_THRESHOLD    = [0, 80, 30, 100, -120, -60]
 
 # ============================================================
 # 物料检测参数
 # ============================================================
-MATERIAL_MIN_AREA    = 200    # 物料最小面积 (像素)
-MATERIAL_MAX_AREA    = 10000  # 物料最大面积
-MATERIAL_MIN_DENSITY = 0.3    # 最小像素密度
-
-# ============================================================
-# 色环检测参数 (用于粗加工区和暂存区精确放置)
-# ============================================================
-COLOR_RING_MIN_RADIUS = 5
-COLOR_RING_MAX_RADIUS = 50
-COLOR_RING_STEP       = 1
+MATERIAL_MIN_PIXELS  = 200    # 物料最小像素数
+MATERIAL_MIN_AREA    = 200    # 最小面积 (像素)
+MATERIAL_MAX_AREA    = 10000  # 最大面积
 
 # ============================================================
 # QR二维码检测参数
 # ============================================================
-QR_MIN_SIZE        = 40       # QR码最小像素尺寸
-QR_EXPECTED_LEN    = 3        # 期望三位数字编码
+QR_EXPECTED_LEN      = 3      # 期望三位数字编码
 
 # ============================================================
 # 系统参数
 # ============================================================
-COMMAND_TIMEOUT_MS = 5000     # 命令超时
-HEARTBEAT_INTERVAL_MS = 500   # 心跳间隔
+COMMAND_TIMEOUT_MS   = 5000   # 命令处理超时 (ms)
+HEARTBEAT_INTERVAL_MS = 500   # 心跳间隔 (ms)
