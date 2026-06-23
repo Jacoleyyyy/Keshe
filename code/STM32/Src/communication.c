@@ -4,6 +4,7 @@
  */
 
 #include "communication.h"
+#include "motor.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,13 +44,64 @@ void Communication_SendCommandEx(MaixCommand_t cmd, const char *params)
     if (len > 0) HAL_UART_Transmit(g_huart, (uint8_t *)g_tx_buf, len, 100);
 }
 
+/**
+ * @brief  串口调试命令解析 (AI/MCP 用)
+ *
+ * 支持命令 (以 \r\n 结尾):
+ *   PID:<kp>,<ki>,<kd>          设置 PID 参数并应用
+ *   PID:?                       查询当前 PID 参数
+ *   TST:<motor>,<rpm>,<ms>      启动阶跃响应测试 (motor为MotorID枚举值: A=0,B=1,C=2,D=3)
+ *
+ * 这些命令与 MaixCAM 协议共用 USART3，用前缀区分。
+ */
+static void ParseDebugCommand(const char *frame)
+{
+    /* --- PID:? --- */
+    if (strncmp(frame, "PID:?", 5) == 0) {
+        printf("PID:? kp=%.4f ki=%.4f kd=%.4f out_lim=%.2f i_lim=%.1f db=%.2f\r\n",
+               g_pid_kp, g_pid_ki, g_pid_kd,
+               g_pid_out_limit, g_pid_i_limit, g_pid_deadband);
+        return;
+    }
+
+    /* --- PID:kp,ki,kd --- */
+    if (strncmp(frame, "PID:", 4) == 0 && frame[4] != '?') {
+        float kp, ki, kd;
+        if (sscanf(frame + 4, "%f,%f,%f", &kp, &ki, &kd) >= 1) {
+            if (kp > 0) g_pid_kp = kp;
+            if (ki > 0) g_pid_ki = ki;
+            if (kd > 0) g_pid_kd = kd;
+            Motor_ApplyPIDGains();
+        }
+        return;
+    }
+
+    /* --- TST:motor_id,target_rpm,duration_ms --- */
+    if (strncmp(frame, "TST:", 4) == 0) {
+        int motor, rpm, ms;
+        if (sscanf(frame + 4, "%d,%d,%d", &motor, &rpm, &ms) == 3) {
+            Motor_RunStepTest((MotorID_t)motor, (float)rpm, (uint32_t)ms);
+        }
+        return;
+    }
+}
+
 void Communication_RxCallback(uint8_t byte)
 {
     if (g_rx_idx < RX_BUF_SIZE - 1) {
         g_rx_buf[g_rx_idx++] = byte;
         if (g_rx_idx >= 2 && g_rx_buf[g_rx_idx - 2] == '\r' && g_rx_buf[g_rx_idx - 1] == '\n') {
             g_rx_buf[g_rx_idx] = '\0';
-            g_frame_ready = true;
+
+            /* 先检查是否为调试命令 (PID:/TST: 前缀) */
+            const char *frame = (const char *)g_rx_buf;
+            if (strncmp(frame, "PID:", 4) == 0 || strncmp(frame, "TST:", 4) == 0) {
+                ParseDebugCommand(frame);
+                g_rx_idx = 0;  /* 已处理, 清空缓冲区 */
+                return;
+            }
+
+            g_frame_ready = true;  /* 否则交给 MaixCAM 协议处理 */
         }
         if (g_rx_idx >= RX_BUF_SIZE - 2) g_rx_idx = 0;
     }

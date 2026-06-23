@@ -12,15 +12,22 @@
 #include "motor.h"
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
-/* PID参数 (GMR编码器, 500线×4×60=120000脉冲/转) */
-#define MOTOR_KP            0.06f
-#define MOTOR_KI            0.015f
-#define MOTOR_KD            0.008f
-#define MOTOR_DT            0.001f
-#define MOTOR_OUT_LIMIT     1.0f
-#define MOTOR_I_LIMIT       30.0f
-#define MOTOR_DEADBAND      0.5f
+/* === 运行时 PID 参数 (AI/MCP 可动态调整) === */
+float g_pid_kp         = 0.06f;
+float g_pid_ki         = 0.015f;
+float g_pid_kd         = 0.008f;
+float g_pid_out_limit  = 1.0f;
+float g_pid_i_limit    = 30.0f;
+float g_pid_deadband   = 0.5f;
+#define MOTOR_DT        0.001f  /* 固定 1ms, 不可调 */
+
+/* 阶跃测试状态 */
+static volatile bool    g_step_test_running = false;
+static volatile uint8_t g_step_motor = 0;
+static volatile float   g_step_target = 0;
+static volatile uint32_t g_step_ticks = 0;
 
 Motor_t g_motors[MOTOR_NUM];
 
@@ -39,11 +46,11 @@ void Motor_Init(MotorID_t id,
     m->ch2_channel = ch2;
     m->htim_enc = htim_enc;
 
-    /* 初始化PID */
-    PID_Init(&m->pid, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_DT, PID_MODE_POSITION);
-    PID_SetOutputLimit(&m->pid, MOTOR_OUT_LIMIT);
-    PID_SetIntegralParam(&m->pid, MOTOR_I_LIMIT, true);
-    PID_SetDeadband(&m->pid, MOTOR_DEADBAND);
+    /* 初始化PID (使用运行时可变参数) */
+    PID_Init(&m->pid, g_pid_kp, g_pid_ki, g_pid_kd, MOTOR_DT, PID_MODE_POSITION);
+    PID_SetOutputLimit(&m->pid, g_pid_out_limit);
+    PID_SetIntegralParam(&m->pid, g_pid_i_limit, true);
+    PID_SetDeadband(&m->pid, g_pid_deadband);
 
     /* 启动PWM (占空比0) */
     if (htim_ch1) HAL_TIM_PWM_Start(htim_ch1, ch1);
@@ -173,5 +180,72 @@ void Motor_PIDUpdate(void)
         } else {
             Motor_SetDuty((MotorID_t)i, duty);
         }
+
+        /* 阶跃测试: 输出 CSV 数据到串口 */
+        if (g_step_test_running && (uint8_t)i == g_step_motor) {
+            if (g_step_ticks > 0) {
+                printf("STEP,%d,%lu,%.1f,%.1f,%.1f,%.3f\r\n",
+                       g_step_motor, g_step_ticks,
+                       m->target_rpm, m->current_rpm, err, duty);
+                g_step_ticks--;
+            }
+            if (g_step_ticks == 0) {
+                g_step_test_running = false;
+                Motor_SetTargetRPM((MotorID_t)g_step_motor, 0.0f);
+                printf("STEP,%d,END,0,0,0,0\r\n", g_step_motor);
+            }
+        }
     }
+}
+
+/**
+ * @brief  将当前全局 PID 参数写入所有 4 个电机
+ * @note   AI 修改 g_pid_kp/ki/kd 后调用, 无需重启
+ */
+void Motor_ApplyPIDGains(void)
+{
+    for (int i = 0; i < MOTOR_NUM; i++) {
+        PID_Controller_t *p = &g_motors[i].pid;
+        p->kp = g_pid_kp;
+        p->ki = g_pid_ki;
+        p->kd = g_pid_kd;
+        p->output_limit = g_pid_out_limit;
+        p->integral_limit = g_pid_i_limit;
+        p->deadband = g_pid_deadband;
+    }
+    printf("PID:SET kp=%.4f ki=%.4f kd=%.4f\r\n",
+           g_pid_kp, g_pid_ki, g_pid_kd);
+}
+
+/**
+ * @brief  PID 阶跃响应测试
+ *
+ * 流程:
+ *   1. 停止电机 500ms (归零)
+ *   2. 设目标转速 = target_rpm
+ *   3. 接下来 step_ms 毫秒内, 每个 PID 周期输出一行 CSV:
+ *        STEP,<电机编号>,<剩余tick>,<目标RPM>,<实际RPM>,<误差>,<占空比>
+ *   4. 测试结束自动停转
+ *
+ * AI 通过 serial_monitor_start 收集 CSV → 分析阶跃响应 →
+ * 计算最佳 Kp/Ki/Kd → 通过 PID: 命令写入 → Motor_ApplyPIDGains()
+ */
+void Motor_RunStepTest(MotorID_t motor_id, float target_rpm, uint32_t step_ms)
+{
+    if (motor_id >= MOTOR_NUM) return;
+
+    printf("STEP,%d,START,target=%.1f,duration=%lu\r\n",
+           motor_id, target_rpm, step_ms);
+
+    /* 归零 */
+    Motor_SetTargetRPM(motor_id, 0.0f);
+    HAL_Delay(300);
+
+    /* 启动测试 */
+    g_step_motor = (uint8_t)motor_id;
+    g_step_target = target_rpm;
+    g_step_ticks = step_ms;  /* 1 tick = 1 PID 周期 = 1ms */
+    g_step_test_running = true;
+
+    Motor_SetTargetRPM(motor_id, target_rpm);
 }
