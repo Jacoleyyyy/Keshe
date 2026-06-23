@@ -6,7 +6,9 @@
 #ifndef __MOTOR_H
 #define __MOTOR_H
 
+#include <stdbool.h>
 #include "pin_config.h"
+#include "protocol.h"
 #include "pid.h"
 
 /* 电机编号 - 对应WHEELTEC命名 */

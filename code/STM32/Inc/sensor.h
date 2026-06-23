@@ -6,7 +6,9 @@
 #ifndef __SENSOR_H
 #define __SENSOR_H
 
+#include <stdbool.h>
 #include "pin_config.h"
+#include "protocol.h"
 
 /* 灰度传感器结构 */
 typedef struct {

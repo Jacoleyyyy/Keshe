@@ -25,18 +25,30 @@ volatile bool g_system_ready = false;
 /* ============================================================
  * FreeRTOS 任务属性
  * ============================================================ */
-#define DEF_TASK_ATTR(name, prio, stack) \
-  static const osThreadAttr_t Task##name##_Attr = { \
-    .name = "Task" #name, .priority = (osPriority_t)prio, .stack_size = stack * 4 }
-
-DEF_TASK_ATTR(Manager,   PRIO_TASK_MANAGER,  STACK_TASK_MANAGER);
-DEF_TASK_ATTR(Chassis,   PRIO_TASK_CHASSIS,  STACK_TASK_CHASSIS);
-DEF_TASK_ATTR(Arm,       PRIO_TASK_ARM,      STACK_TASK_ARM);
-DEF_TASK_ATTR(Comm,      PRIO_TASK_COMM,     STACK_TASK_COMM);
-DEF_TASK_ATTR(Sensor,    PRIO_TASK_SENSOR,   STACK_TASK_SENSOR);
-DEF_TASK_ATTR(Display,   PRIO_TASK_DISPLAY,  STACK_TASK_DISPLAY);
-DEF_TASK_ATTR(Obstacle,  PRIO_TASK_OBSTACLE, STACK_TASK_OBSTACLE);
-DEF_TASK_ATTR(Monitor,   PRIO_TASK_MONITOR,  STACK_TASK_MONITOR);
+static const osThreadAttr_t TaskManager_Attr = {
+    .name = "TaskManager", .priority = (osPriority_t)PRIO_TASK_MANAGER, .stack_size = STACK_TASK_MANAGER * 4
+};
+static const osThreadAttr_t TaskChassis_Attr = {
+    .name = "TaskChassis", .priority = (osPriority_t)PRIO_TASK_CHASSIS, .stack_size = STACK_TASK_CHASSIS * 4
+};
+static const osThreadAttr_t TaskArm_Attr = {
+    .name = "TaskArm", .priority = (osPriority_t)PRIO_TASK_ARM, .stack_size = STACK_TASK_ARM * 4
+};
+static const osThreadAttr_t TaskComm_Attr = {
+    .name = "TaskComm", .priority = (osPriority_t)PRIO_TASK_COMM, .stack_size = STACK_TASK_COMM * 4
+};
+static const osThreadAttr_t TaskSensor_Attr = {
+    .name = "TaskSensor", .priority = (osPriority_t)PRIO_TASK_SENSOR, .stack_size = STACK_TASK_SENSOR * 4
+};
+static const osThreadAttr_t TaskDisplay_Attr = {
+    .name = "TaskDisplay", .priority = (osPriority_t)PRIO_TASK_DISPLAY, .stack_size = STACK_TASK_DISPLAY * 4
+};
+static const osThreadAttr_t TaskObstacle_Attr = {
+    .name = "TaskObstacle", .priority = (osPriority_t)PRIO_TASK_OBSTACLE, .stack_size = STACK_TASK_OBSTACLE * 4
+};
+static const osThreadAttr_t TaskMonitor_Attr = {
+    .name = "TaskMonitor", .priority = (osPriority_t)PRIO_TASK_MONITOR, .stack_size = STACK_TASK_MONITOR * 4
+};
 
 /* ============================================================
  * main()
@@ -121,7 +133,7 @@ void SystemClock_Config(void)
 
     HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq() / 1000);
     HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
-    HAL_NVIC_SetPriorityGrouping(NVIC_PRIORGROUP_4);
+    HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
 }
 
 /* ============================================================

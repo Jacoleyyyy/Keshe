@@ -35,7 +35,7 @@ static uint16_t AngleToPulse(uint16_t angle)
 void Servo_Init(TIM_HandleTypeDef *htim)
 {
     g_htim = htim;
-    TIM_ChannelConfTypeDef sConfig = {0};
+    TIM_OC_InitTypeDef sConfig = {0};
     sConfig.OCMode = TIM_OCMODE_PWM1;
     sConfig.OCPolarity = TIM_OCPOLARITY_HIGH;
     sConfig.OCFastMode = TIM_OCFAST_DISABLE;

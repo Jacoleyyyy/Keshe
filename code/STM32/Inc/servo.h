@@ -6,6 +6,7 @@
 #ifndef __SERVO_H
 #define __SERVO_H
 
+#include <stdbool.h>
 #include "pin_config.h"
 
 typedef enum {

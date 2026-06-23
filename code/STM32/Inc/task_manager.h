@@ -7,6 +7,7 @@
 #ifndef __TASK_MANAGER_H
 #define __TASK_MANAGER_H
 
+#include "cmsis_os2.h"
 #include "protocol.h"
 #include "communication.h"
 #include "chassis.h"

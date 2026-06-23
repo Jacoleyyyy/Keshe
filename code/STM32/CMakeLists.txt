@@ -61,6 +61,7 @@ add_definitions(
     -DUSE_HAL_DRIVER
     -D${MCU}
     -DSTM32F407xx
+    -DCMSIS_device_header=\"stm32f407xx.h\"
 )
 
 # ============================================================
@@ -141,7 +142,7 @@ set(FREERTOS_SOURCES
 # ============================================================
 # 启动文件
 # ============================================================
-set(STARTUP_FILE ${CMSIS_DEVICE}/Source/Templates/gcc/startup_stm32f407xx.s)
+set(STARTUP_FILE ${CMSIS_DEVICE}/Source/Templates/startup_stm32f407xx.s)
 
 # ============================================================
 # 链接脚本

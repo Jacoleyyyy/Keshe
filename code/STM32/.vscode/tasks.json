@@ -109,7 +109,7 @@
             "args": [
                 "-f", "interface/stlink.cfg",
                 "-f", "target/stm32f4x.cfg",
-                "-c", "program build/smart_carrier.elf verify reset exit"
+                "-c", "program build/smart_carrier verify reset exit"
             ],
             "options": { "cwd": "${workspaceFolder}" },
             "dependsOn": ["Build"],

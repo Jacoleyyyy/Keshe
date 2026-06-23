@@ -29,7 +29,7 @@
     "cortex-debug.registerUseNaturalFormat": true,
     "cortex-debug.displayDemangled": true,
     "cortex-debug.showRTOSDebugOutput": true,
-    "cortex-debug.armToolchainPath": "C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/13.3.rel1/bin",
+    "cortex-debug.armToolchainPath": "C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/12.2 mpacbti-rel1/bin",
     // 如果 arm-none-eabi-gdb 在 PATH 中, 上面那行可以注释掉:
     // "cortex-debug.armToolchainPath": null,
 

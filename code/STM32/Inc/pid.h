@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 
 /* PID 模式 */
 typedef enum {

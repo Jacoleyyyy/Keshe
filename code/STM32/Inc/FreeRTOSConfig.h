@@ -6,15 +6,12 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
-/* 引入 CMSIS-FreeRTOS 默认配置 */
-#include "FreeRTOSConfig_template.h"
-
 /* ============================================================
  * 硬件相关
  * ============================================================ */
-#define configCPU_CLOCK_HZ                      ( SystemCoreClock )
+#define configCPU_CLOCK_HZ                      ( 168000000UL )
 #define configTICK_RATE_HZ                      ( (TickType_t) 1000 )
-#define configMAX_PRIORITIES                    ( 16 )
+#define configMAX_PRIORITIES                    ( 56 )
 #define configMINIMAL_STACK_SIZE                ( (uint16_t) 256 )
 #define configTOTAL_HEAP_SIZE                   ( (size_t) (48 * 1024) )
 #define configMAX_TASK_NAME_LEN                 ( 24 )
@@ -26,7 +23,7 @@
  * ============================================================ */
 #define configUSE_PREEMPTION                    1
 #define configUSE_TIME_SLICING                  1
-#define configUSE_PORT_OPTIMISED_TASK_SELECTION 1
+#define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
 #define configUSE_TICKLESS_IDLE                 0
 
 /* ============================================================
@@ -63,7 +60,7 @@
  * 运行时统计 (调试用)
  * ============================================================ */
 #define configGENERATE_RUN_TIME_STATS           0
-#define configUSE_TRACE_FACILITY                0
+#define configUSE_TRACE_FACILITY                1
 #define configUSE_STATS_FORMATTING_FUNCTIONS    0
 
 /* ============================================================
@@ -93,6 +90,7 @@
  * NVIC 优先级分组: 4位抢占优先级
  * 可被 FreeRTOS API 调用的中断优先级范围: 5~15
  * ============================================================ */
+#define configPRIO_BITS                          4  /* STM32 使用 4 位抢占优先级 */
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY  15
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5
 #define configKERNEL_INTERRUPT_PRIORITY          ( configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
