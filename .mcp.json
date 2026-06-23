@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "serial": {
+      "command": "python",
+      "args": [
+        ".claude/mcp-servers/serial_mcp.py"
+      ],
+      "env": {},
+      "description": "STM32 printf 串口日志 — AI 可直接读写串口, 监控机器人运行状态"
+    },
+    "pyocd": {
+      "command": "python",
+      "args": [
+        ".claude/mcp-servers/pyocd_mcp.py"
+      ],
+      "env": {},
+      "description": "STM32 编译/烧录 — AI 可编译项目并烧录到 MCU"
+    }
+  }
+}

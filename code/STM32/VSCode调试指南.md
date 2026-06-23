@@ -410,173 +410,172 @@ g_sys.has_error                 # 出错标志
 
 > 这是 VSCode 工具链的终极形态——AI 读串口日志，自动分析问题。
 
-### 5.1 总体架构
+### 5.1 总体架构 — MCP 打通 AI ↔ 硬件
+
+**MCP (Model Context Protocol)** 是 AI 和外设之间的标准协议。配置好 MCP 后，AI 不再需要你手动采集日志——它自己就能读串口、编译、烧录。
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                    AI Agent (Claude Code / OpenCode)       │
-│                                                           │
-│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │  代码上下文      │  │  串口日志流   │  │  调试器接口   │ │
-│  │  (项目全部源码)   │  │  (printf/LOG) │  │  (GDB MI)    │ │
-│  └────────┬────────┘  └──────┬───────┘  └──────┬───────┘ │
-│           │                  │                  │          │
-│           ▼                  ▼                  ▼          │
-│  AI 读取全部代码    AI 看 printf 输出    AI 设断点/读变量    │
-│  理解上下文         自动发现异常         自动排查           │
-│                                                           │
-│  输出: "电机C转速异常, 建议检查编码器接线或加大KP到0.08"    │
-└───────────────────────────────────────────────────────────┘
-         │                    │
-         ▼                    ▼
-    STM32F407           USB-UART 串口
+┌──────────────────────────────────────────────────────────────┐
+│              Claude Code (项目根目录启动)                      │
+│                                                              │
+│  ┌────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│  │ 代码上下文  │    │ serial MCP   │    │ pyocd MCP    │     │
+│  │ (CLAUDE.md │    │              │    │              │     │
+│  │  全部源码)  │    │ serial_read  │    │ build        │     │
+│  │            │    │ serial_moni- │    │ flash        │     │
+│  │            │    │ tor_start    │    │ build & flash│     │
+│  │            │    │ serial_send  │    │ check tool-  │     │
+│  │            │    │ list_ports   │    │ chain        │     │
+│  └─────┬──────┘    └──────┬───────┘    └──────┬───────┘     │
+│        │                 │                   │               │
+└────────┼─────────────────┼───────────────────┼───────────────┘
+         │                 │ (MCP stdio)       │
+         ▼                 ▼                   ▼
+  项目源码 + 文档     STM32 USART3          ST-Link
+                     printf 日志            烧录器
+                     USB-UART 线            USB 线
 ```
 
-### 5.2 安装 Claude Code / OpenCode
+**和之前方案的区别**：
 
-**Claude Code**（Anthropic 官方 CLI AI 编程工具）：
+| | 之前（无 MCP） | 现在（有 MCP） |
+|:---|:---|:---|
+| 串口 | 你手动跑 Python 脚本采集 serial.log → AI 读文件 | AI 直接调 `serial_monitor_start` |
+| 烧录 | 你手动跑 `pyocd load` | AI 直接调 `flash` |
+| 闭环 | 你说一次 → AI 改代码 → 你手动编译烧录跑 → 你看日志贴给 AI → 循环 | AI 改代码 → AI 编译 → AI 烧录 → AI 看串口 → 再改 → 全自动 |
+
+### 5.2 安装 Claude Code
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
-在项目根目录启动：
+### 5.3 安装 MCP 依赖
+
+```bash
+pip install pyserial pyocd mcp
+```
+
+> `pyserial` = 串口通信，`pyocd` = ST-Link 烧录，`mcp` = MCP 协议 Python SDK
+
+### 5.4 MCP 配置（项目已配好）
+
+项目中已包含 `.mcp.json` 和两个 MCP Server：
+
+```
+f:\KeShe\
+├── .mcp.json                        ← Claude Code 自动加载
+└── .claude/
+    └── mcp-servers/
+        ├── serial_mcp.py            ← 串口 MCP (读 printf, 发调试命令, 监控)
+        └── pyocd_mcp.py             ← 烧录 MCP (编译, 烧录, 检查工具链)
+```
+
+**检查 MCP 是否加载**：在 Claude Code 里输入 `/mcp`，应列出 `serial` 和 `pyocd` 两个 server。
+
+### 5.5 STM32 端：加 printf
+
+在 `main.c` 尾部添加（GCC 版 printf 重定向到 USART3）：
+
+```c
+#ifdef __GNUC__
+int _write(int file, char *ptr, int len) {
+    HAL_UART_Transmit(&huart3, (uint8_t *)ptr, len, 100);
+    return len;
+}
+#endif
+```
+
+在 `task_manager.c` 关键位置加 LOG 宏：
+
+```c
+#define LOG(fmt, ...) printf("[%lu] " fmt "\r\n", osKernelGetTickCount(), ##__VA_ARGS__)
+
+// 状态转换
+LOG("STATE: %s → %s", STATE_NAMES[g_sys.prev_state], STATE_NAMES[g_sys.state]);
+
+// PID 异常
+if (fabsf(m->current_rpm - m->target_rpm) > 50.0f)
+    LOG("WARN: M%d RPM err target=%.0f actual=%.0f", m->id, m->target_rpm, m->current_rpm);
+```
+
+### 5.6 实际使用示例
+
+**启动 Claude Code**：
 
 ```bash
 cd f:/KeShe
 claude
 ```
 
-AI 将自动读取 CLAUDE.md、所有源码、.gitignore 等 → 直接对话式编程。
-
-**OpenCode**（开源替代，支持本地模型）：
-
-```bash
-# https://github.com/opencode-ai/opencode
-# 支持 Ollama / LM Studio 等本地大模型
-pip install opencode
-```
-
-### 5.3 串口接入 AI
-
-**核心思路**：让 printf 日志同时输出到串口和文件，AI 读取文件来诊断。
-
-**第一步：在 STM32 上加 printf 重定向**
-
-在 `main.c` 尾部添加（或用独立 `debug_console.c`）：
-
-```c
-/* __GNUC__ 版本的 printf 重定向 → USART3 */
-#ifdef __GNUC__
-int _write(int file, char *ptr, int len)
-{
-    HAL_UART_Transmit(&huart3, (uint8_t *)ptr, len, 100);
-    return len;
-}
-#endif
-
-/* 在 main() 初始化末尾加 */
-printf("\r\n[BOOT] Smart Carrier v1.0\r\n");
-printf("[BOOT] System Clock: %lu MHz\r\n", SystemCoreClock / 1000000);
-```
-
-**第二步：在状态机关键节点加 LOG**
-
-在 `task_manager.c` 中：
-
-```c
-#define LOG(fmt, ...)  printf("[%lu] " fmt "\r\n", osKernelGetTickCount(), ##__VA_ARGS__)
-
-// 状态转换时
-LOG("STATE: %s → %s", STATE_NAMES[g_sys.prev_state], STATE_NAMES[g_sys.state]);
-
-// 电机 PID 异常
-if (fabsf(m->current_rpm - m->target_rpm) > 50.0f)
-    LOG("WARN: Motor%d RPM偏差过大 target=%.0f actual=%.0f", m->id, m->target_rpm, m->current_rpm);
-
-// 视觉响应超时
-if (err != COMM_OK) LOG("ERR: MaixCAM timeout cmd=%d", cmd);
-```
-
-**第三步：串口转文件**
-
-用 Python 脚本或 `screen`/`minicom` 的日志功能：
-
-```bash
-# 方式一: Python 脚本 (推荐, 跨平台)
-python -c "
-import serial, sys
-ser = serial.Serial('COM3', 115200)
-with open('serial.log', 'a') as f:
-    while True:
-        line = ser.readline().decode(errors='ignore')
-        sys.stdout.write(line)
-        f.write(line)
-" > serial.log
-
-# 方式二: PowerShell (Windows)
-# 用 Putty 的 "All session output" 日志功能
-```
-
-### 5.4 AI 自动日志诊断
-
-**场景一：运行时出错，AI 分析日志**
+**对话示例 1 — 诊断运行时问题**：
 
 ```
-你: 机器人跑完第二步就卡住了，日志在 serial.log
-
-AI 读取 serial.log 后:
-"从日志看:
-  [1240] STATE: MOVE_RAW → FIND_MAT
-  [3200] ERR: MaixCAM timeout cmd=3     ← 关键!
-  [3201] STATE: FIND_MAT → ERROR
-
-  问题: FIND_MATERIAL 命令超时。可能原因:
-  1. MaixCAM 的串口没接好 (检查 PB10/PB11 接线)
-  2. MaixCAM 没上电或 main.py 没运行
-  3. config.py 中颜色阈值不对，找不到物料
-  建议: 先在 MaixCAM 屏幕上确认 color_detector 能看到物料"
-```
-
-**场景二：让 AI 自动编码+烧录+看日志**
-
-```
-你: 帮我在每次电机启动时打印 RPM，编译烧录，然后跑一遍看日志
+你: 接上 ST-Link 和串口线了，帮我编译烧录，然后监控 15 秒串口看有没有报错
 
 AI:
-1. 修改 motor.c 的 Motor_SetTargetRPM → 添加 printf
-2. cmake --build build -j8
-3. pyocd load build/smart_carrier.hex --target stm32f407ve
-4. 启动串口日志采集脚本
-5. "请你现在启动机器人，我会看串口输出..."
-6. [等机器人跑完]
-7. 读取 serial.log → 分析 → 输出结论
+  → 调用 pyocd_mcp: build_and_flash
+  → "✅ 编译成功, ✅ 烧录成功"
+  → 调用 serial_mcp: serial_list_ports
+  → "检测到 COM3 — STMicroelectronics STLink Virtual COM Port"
+  → 调用 serial_mcp: serial_connect(port="COM3", baudrate=115200)
+  → "已连接 COM3"
+  → "现在请启动机器人..."
+  → 调用 serial_mcp: serial_monitor_start(duration_s=15)
+  → 返回 15 秒内的所有 printf 输出
+  → "日志显示 STATE: SCAN_QR → PROCESS_QR 正常,
+     但在 FIND_MATERIAL 时 RSP:ERR,timeout
+     → 建议检查 MaixCAM 是否在位、config.py 颜色阈值是否正确"
 ```
 
-### 5.5 AI 闭环调试工作流
+**对话示例 2 — 自动调参**：
 
 ```
-┌─────────────────────────────────────────────────────┐
-│               AI 闭环调试工作流                       │
-│                                                     │
-│  1. 你说: "机器人向左边偏, 帮我调车道修正"            │
-│                                                     │
-│  2. AI 分析 chassis.c 的 Chassis_HybridLaneFollow()  │
-│     → 发现 kp=2.5 可能太小                          │
-│                                                     │
-│  3. AI 修改 kp=4.0 → 编译 → 烧录                     │
-│                                                     │
-│  4. 你启动机器人 → AI 看串口日志                     │
-│     printf: "Lane offset=35mm"                      │
-│     (之前是 60mm偏移 → kp=2.5修正不够)               │
-│                                                     │
-│  5. AI 继续调大 kp=5.0 → 编译 → 烧录                 │
-│     printf: "Lane offset=12mm" ← 好了!              │
-│                                                     │
-│  6. "已修正, kp 建议值 5.0, 偏移从 60mm 降到 12mm"   │
-└─────────────────────────────────────────────────────┘
+你: 看串口日志发现 offset 偏大 (平均 60mm), 帮我把 Chassis_HybridLaneFollow
+    里的 kp 从 2.5 调到 5.0，编译烧录，我再跑一圈
+
+AI:
+  → 修改 chassis.c kp=5.0
+  → build_and_flash
+  → "✅ 已编译烧录, kp 已改为 5.0, 请启动机器人"
 ```
+
+**对话示例 3 — 模拟 MaixCAM 命令测 STM32**：
+
+```
+你: MaixCAM 还没接, 帮我模拟发 CMD:SCAN_QR 给 STM32 看它能不能正确响应
+
+AI:
+  → serial_connect("COM3")
+  → serial_send("CMD:SCAN_QR")
+  → serial_read()
+  → "STM32 回复了 CMD:HEARTBEAT, 说明 UART3 通信正常
+     (QR 扫描请求需要 MaixCAM 实际处理, 这个回复说明 STM32 在主动发心跳)"
+```
+
+### 5.7 MCP 工具速查表
+
+**serial MCP** (`serial_mcp.py`)：
+
+| 工具 | 功能 | 典型用法 |
+|------|------|---------|
+| `serial_list_ports` | 列出可用串口 | "帮我看接了几个串口" |
+| `serial_connect` | 连接指定串口 | `serial_connect("COM3", 115200)` |
+| `serial_read` | 读缓冲区已有数据 | 跑完一圈后看累积日志 |
+| `serial_monitor_start` | 采集 N 秒实时日志 | `serial_monitor_start(15)` |
+| `serial_send` | 向 STM32 发数据 | 模拟 MaixCAM 命令调试 |
+| `serial_disconnect` | 断开 | 切换串口前 |
+
+**pyocd MCP** (`pyocd_mcp.py`)：
+
+| 工具 | 功能 |
+|------|------|
+| `check_toolchain` | 检查 ARM GCC / CMake / Ninja / pyOCD 是否就绪 |
+| `cmake_configure` | CMake 初始化 (首次/改 CMakeLists.txt 后) |
+| `build` | 编译项目 |
+| `flash` | 烧录 hex 到 STM32F407VE |
+| `build_and_flash` | 编译 + 烧录 一键 |
 
 ---
 
