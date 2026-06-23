@@ -51,7 +51,16 @@ qrs = img.find_qrcodes()
 ```
 STM32 发送:  CMD:CHECK_LANE\r\n
 MaixCAM 回复: RSP:LANE,<offset_mm>,<on_lane>\r\n
-
-offset_mm: 车道中心偏移 (mm), 正=偏右, 负=偏左
-on_lane:   1=在车道上, 0=掉线
 ```
+
+## STM32 串口调试命令 (USART3, 115200)
+
+以下命令发给 STM32 而非 MaixCAM，用于运行时 PID 调参：
+
+| 命令 | 功能 |
+|------|------|
+| `PID:?\r\n` | 查询当前 Kp/Ki/Kd |
+| `PID:0.07,0.018,0.012\r\n` | 设置参数，立即生效 |
+| `TST:0,100,300\r\n` | 阶跃测试 (电机A, 100RPM, 300ms)，输出 CSV |
+
+> 详见 [CLAUDE.md](../../CLAUDE.md) §十五
