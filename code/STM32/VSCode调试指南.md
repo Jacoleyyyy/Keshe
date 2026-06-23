@@ -208,35 +208,9 @@ openocd --version
 
 ### 2.6 STM32CubeF4 库文件
 
-这一步和之前 Keil5 教程相同：
+> 🎉 **已在仓库中**。`Drivers/`（HAL + CMSIS）和 `Middlewares/`（FreeRTOS）已包含在 `code/STM32/` 下，clone 即可编译，无需手动复制。
 
-```
-1. 下载 https://www.st.com/en/embedded-software/stm32cubef4.html
-2. 解压后把 Drivers/ 和 Middlewares/ 复制到 code/STM32/ 下
-
-最终结构:
-code/STM32/
-├── Drivers/
-│   ├── CMSIS/Core/Include/
-│   ├── CMSIS/Device/ST/STM32F4xx/
-│   └── STM32F4xx_HAL_Driver/
-├── Middlewares/Third_Party/FreeRTOS/Source/
-├── Inc/  (项目头文件)
-├── Src/  (项目源文件)
-├── CMakeLists.txt
-├── .clangd
-└── .vscode/
-```
-
-**链接脚本**：如果 `STM32F407VETx_FLASH.ld` 不在项目根目录，CMakeLists.txt 会自动回退到 CubeF4 包中的 `STM32F407VE_FLASH.ld`。
-
-**SVD 文件**（外设寄存器描述）：从 CubeF4 包中复制：
-
-```
-FROM: Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
-      旁边的 SVD 文件 STM32F407.svd
-TO:   code/STM32/STM32F407.svd
-```
+包括：CMSIS Core、STM32F4xx HAL 驱动（全部模块）、FreeRTOS v10（含 GCC/ARM_CM4F 移植层）、GCC 启动文件 `startup_stm32f407xx.s`、链接脚本 `STM32F407VETx_FLASH.ld`（512KB Flash）。
 
 ---
 

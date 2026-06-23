@@ -67,30 +67,31 @@ Keshe/
 | OpenOCD | 0.12+ | (可选) VSCode 调试 |
 | ST-Link | V2 | 调试器/烧录器 |
 
-### 编译 & 烧录 (Keil5)
+### 🚀 一键上手 (VSCode)
 
-```
-1. 将 code/STM32/Inc/ 和 code/STM32/Src/ 加入 Keil 工程
-2. 在 Keil 工程中添加 HAL 库、CMSIS、FreeRTOS 源文件
-3. F7 编译 → F8 下载
-```
-
-### 编译 & 烧录 (VSCode + CMake + Ninja)
+> **HAL 库、CMSIS、FreeRTOS 已在仓库中，无需手动下载复制。**
 
 ```bash
-cd code/STM32
+# 1. 安装工具链 (只需一次, 5 分钟)
+#    下载 ARM GCC: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
+#    安装后开新终端:
+winget install Kitware.CMake Ninja-build.Ninja
+pip install pyocd
+
+# 2. 克隆并编译
+git clone https://github.com/Jacoleyyyy/Keshe.git
+cd Keshe/code/STM32
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-cp build/compile_commands.json .   # clangd 需要
-cmake --build build -j8            # 编译
-pyocd load build/smart_carrier.hex --target stm32f407ve  # 烧录
-# 或者直接按 F5 启动 Cortex-Debug 调试
+cp build/compile_commands.json .
+cmake --build build -j8
+
+# 3. VSCode 打开 code/STM32/ → 装 clangd + Cortex-Debug 插件 → 按 F5 调试
 ```
 
-### 🤖 AI 模式 (Claude Code + MCP)
+### 🤖 AI 模式
 
 ```bash
-cd f:/KeShe && claude    # 启动 AI, MCP 自动加载
-# AI 可以: 编译烧录 / 读串口日志 / 自动 PID 调参 / 诊断问题
+cd Keshe && claude    # MCP 自动加载, AI 可编译/烧录/读串口/调 PID
 ```
 
 ---
