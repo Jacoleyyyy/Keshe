@@ -33,7 +33,7 @@ set(CMAKE_OBJCOPY       ${TRIPLE}objcopy)
 set(CMAKE_SIZE          ${TRIPLE}size)
 
 # MCU 参数
-set(MCU        STM32F407VG)
+set(MCU        STM32F407VE)
 set(CPU        cortex-m4)
 set(FPU        fpv4-sp-d16)
 set(FLOAT_ABI  hard)
@@ -146,10 +146,10 @@ set(STARTUP_FILE ${CMSIS_DEVICE}/Source/Templates/gcc/startup_stm32f407xx.s)
 # ============================================================
 # 链接脚本
 # ============================================================
-set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F407VGTx_FLASH.ld)
+set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F407VETx_FLASH.ld)
 # 如果没有独立的 .ld 文件, 使用 CubeF4 提供的
 if(NOT EXISTS ${LINKER_SCRIPT})
-    set(LINKER_SCRIPT ${CMSIS_DEVICE}/Source/Templates/gcc/linker/STM32F407VG_FLASH.ld)
+    set(LINKER_SCRIPT ${CMSIS_DEVICE}/Source/Templates/gcc/linker/STM32F407VE_FLASH.ld)
 endif()
 
 # ============================================================
@@ -187,7 +187,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 # ============================================================
 add_custom_target(flash
     COMMAND pyocd load ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.hex
-            --target stm32f407vg
+            --target stm32f407ve
             --frequency 4000000
     COMMENT "Flashing via pyOCD (ST-Link)..."
     DEPENDS ${PROJECT_NAME}

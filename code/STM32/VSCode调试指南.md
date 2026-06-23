@@ -228,7 +228,7 @@ code/STM32/
 └── .vscode/
 ```
 
-**链接脚本**：如果 `STM32F407VGTx_FLASH.ld` 不在项目根目录，CMakeLists.txt 会自动回退到 CubeF4 包中的 `STM32F407VG_FLASH.ld`。
+**链接脚本**：如果 `STM32F407VETx_FLASH.ld` 不在项目根目录，CMakeLists.txt 会自动回退到 CubeF4 包中的 `STM32F407VE_FLASH.ld`。
 
 **SVD 文件**（外设寄存器描述）：从 CubeF4 包中复制：
 
@@ -275,7 +275,7 @@ Generating .hex .bin + size report
 
 ```bash
 # pyOCD (推荐)
-pyocd load build/smart_carrier.hex --target stm32f407vg
+pyocd load build/smart_carrier.hex --target stm32f407ve
 
 # 或 OpenOCD
 openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
@@ -317,7 +317,7 @@ cmake -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build -j8
 
 # 烧录
-pyocd load build/smart_carrier.hex --target stm32f407vg
+pyocd load build/smart_carrier.hex --target stm32f407ve
 
 # 清理
 cmake --build build --target clean
@@ -547,7 +547,7 @@ AI 读取 serial.log 后:
 AI:
 1. 修改 motor.c 的 Motor_SetTargetRPM → 添加 printf
 2. cmake --build build -j8
-3. pyocd load build/smart_carrier.hex --target stm32f407vg
+3. pyocd load build/smart_carrier.hex --target stm32f407ve
 4. 启动串口日志采集脚本
 5. "请你现在启动机器人，我会看串口输出..."
 6. [等机器人跑完]
@@ -616,7 +616,7 @@ cmake -B build -G "MinGW Makefiles" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ```bash
 # 检查驱动
 pyocd list
-# 应列出 ST-Link 和 STM32F407VG
+# 应列出 ST-Link 和 STM32F407VE
 
 # 如果没找到:
 # 1. 检查 USB 线

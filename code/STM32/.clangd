@@ -12,7 +12,7 @@ CompileFlags:
     # 宏定义
     - "-DUSE_HAL_DRIVER"
     - "-DSTM32F407xx"
-    - "-DSTM32F407VG"
+    - "-DSTM32F407VE"
     # C 标准
     - "-std=gnu11"
     # 头文件路径

@@ -10,7 +10,7 @@
 
 # 目标 MCU
 TARGET        := smart_carrier
-MCU           := STM32F407VG
+MCU           := STM32F407VE
 CPU           := cortex-m4
 FPU           := fpv4-sp-d16
 FLOAT-ABI     := hard
@@ -42,7 +42,7 @@ CMSIS_RTOS_DIR := $(PROJECT_DIR)/Middlewares/Third_Party/FreeRTOS/CMSIS_RTOS_V2
 
 # 启动文件
 STARTUP_FILE  := $(PROJECT_DIR)/startup_stm32f407xx.s
-LINKER_SCRIPT := $(PROJECT_DIR)/STM32F407VGTx_FLASH.ld
+LINKER_SCRIPT := $(PROJECT_DIR)/STM32F407VETx_FLASH.ld
 
 # ============================================================
 # 源文件

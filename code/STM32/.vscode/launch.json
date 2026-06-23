@@ -16,8 +16,8 @@
             "executable": "${workspaceFolder}/build/smart_carrier.elf",
             "servertype": "pyocd",
             "serverpath": "pyocd",
-            "device": "STM32F407VG",
-            "targetId": "stm32f407vg",
+            "device": "STM32F407VE",
+            "targetId": "stm32f407ve",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
 
             "runToEntryPoint": "main",
@@ -95,7 +95,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/smart_carrier.elf",
             "servertype": "jlink",
-            "device": "STM32F407VG",
+            "device": "STM32F407VE",
             "interface": "swd",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
 
@@ -122,7 +122,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/smart_carrier.elf",
             "servertype": "pyocd",
-            "device": "STM32F407VG",
+            "device": "STM32F407VE",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
 
             "rtos": "FreeRTOS",
