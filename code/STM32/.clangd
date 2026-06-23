@@ -1,0 +1,56 @@
+# .clangd — clangd 语言服务器配置
+# 为 STM32F407 (ARM Cortex-M4) 提供准确的语法高亮、补全、跳转
+
+CompileFlags:
+  Add:
+    # ARM Cortex-M4 目标
+    - "--target=arm-none-eabi"
+    - "-mcpu=cortex-m4"
+    - "-mthumb"
+    - "-mfpu=fpv4-sp-d16"
+    - "-mfloat-abi=hard"
+    # 宏定义
+    - "-DUSE_HAL_DRIVER"
+    - "-DSTM32F407xx"
+    - "-DSTM32F407VG"
+    # C 标准
+    - "-std=gnu11"
+    # 头文件路径
+    - "-IInc"
+    - "-IDrivers/CMSIS/Core/Include"
+    - "-IDrivers/CMSIS/Device/ST/STM32F4xx/Include"
+    - "-IDrivers/STM32F4xx_HAL_Driver/Inc"
+    - "-IMiddlewares/Third_Party/FreeRTOS/Source/include"
+    - "-IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2"
+    - "-IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F"
+
+  Remove:
+    # 移除宿主机的编译标志 (如果你装了宿主 gcc)
+    - "-march=*"
+    - "-m32"
+    - "-m64"
+
+# 索引设置
+Index:
+  Background: Build        # 后台索引, 不阻塞
+
+# 诊断设置
+Diagnostics:
+  Suppress:
+    - "pp_file_not_found"  # 如果 HAL 库没复制过来, 先不报错 (避免刷屏)
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - modernize-*
+      - performance-*
+    Remove:
+      - modernize-use-trailing-return-type
+      - modernize-avoid-c-arrays
+
+# 补全设置
+Completion:
+  AllScopes: true
+
+# InlayHints (类型提示)
+InlayHints:
+  Enabled: false

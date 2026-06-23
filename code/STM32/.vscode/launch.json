@@ -2,9 +2,54 @@
     "version": "0.2.0",
     "configurations": [
 
-        // ============================================
-        // 方案一: OpenOCD + ST-Link (推荐)
-        // ============================================
+        // ============================================================
+        //  方案一: pyOCD + ST-Link (推荐)
+        //
+        //  Cortex-Debug 内置 pyOCD 支持, 无需手动启动 GDB server
+        //  pyOCD 比 OpenOCD 对 STM32F4 的支持更现代, 启动更快
+        // ============================================================
+        {
+            "name": "STM32 Debug (pyOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/smart_carrier.elf",
+            "servertype": "pyocd",
+            "serverpath": "pyocd",
+            "device": "STM32F407VG",
+            "targetId": "stm32f407vg",
+            "svdFile": "${workspaceFolder}/STM32F407.svd",
+
+            "runToEntryPoint": "main",
+
+            "preLaunchTask": "Build",
+            "preRestartCommands": [
+                "monitor reset halt"
+            ],
+
+            "rtos": "FreeRTOS",
+            "rtosView": "threads",
+
+            "rttConfig": {
+                "enabled": false,
+                "address": "auto"
+            },
+
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+
+            "graphConfig": [
+                { "name": "Motor A RPM",  "type": "float", "calculation": "g_motors[0].current_rpm", "visible": true },
+                { "name": "Motor B RPM",  "type": "float", "calculation": "g_motors[1].current_rpm", "visible": false },
+                { "name": "State",        "type": "int",   "calculation": "g_sys.state",              "visible": true }
+            ]
+        },
+
+        // ============================================================
+        //  方案二: OpenOCD + ST-Link (经典方案)
+        // ============================================================
         {
             "name": "STM32 Debug (OpenOCD)",
             "type": "cortex-debug",
@@ -16,47 +61,33 @@
                 "interface/stlink.cfg",
                 "target/stm32f4x.cfg"
             ],
-            "searchDir": [],
-            "runToEntryPoint": "main",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
-            "preLaunchTask": "Build STM32",
-            "postDebugTask": "",
 
-            // FreeRTOS 线程感知
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Build",
+
             "rtos": "FreeRTOS",
             "rtosView": "threads",
 
-            // 启动后自动打开外设视图
-            "showDevDebugOutput": "parsed",
+            "rttConfig": {
+                "enabled": false,
+                "address": "auto"
+            },
+
             "liveWatch": {
                 "enabled": true,
                 "samplesPerSecond": 4
             },
 
-            // 优化调试体验
-            "rttConfig": {
-                "enabled": false,
-                "address": "auto"
-            },
             "graphConfig": [
-                {
-                    "name": "Motor RPM (FL)",
-                    "type": "float",
-                    "calculation": "g_motors[0].current_rpm",
-                    "visible": true
-                },
-                {
-                    "name": "Task State",
-                    "type": "int",
-                    "calculation": "g_sys.state",
-                    "visible": true
-                }
+                { "name": "Motor A RPM", "type": "float", "calculation": "g_motors[0].current_rpm", "visible": true },
+                { "name": "State",       "type": "int",   "calculation": "g_sys.state",              "visible": true }
             ]
         },
 
-        // ============================================
-        // 方案二: J-Link (如果你用的是J-Link调试器)
-        // ============================================
+        // ============================================================
+        //  方案三: J-Link
+        // ============================================================
         {
             "name": "STM32 Debug (J-Link)",
             "type": "cortex-debug",
@@ -66,31 +97,40 @@
             "servertype": "jlink",
             "device": "STM32F407VG",
             "interface": "swd",
-            "runToEntryPoint": "main",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
-            "preLaunchTask": "Build STM32",
+
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Build",
 
             "rtos": "FreeRTOS",
-            "rtosView": "threads"
+            "rtosView": "threads",
+
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            }
         },
 
-        // ============================================
-        // 方案三: OpenOCD Attach (附加到运行中的MCU)
-        // ============================================
+        // ============================================================
+        //  方案四: Attach (附加到运行中的 MCU, 不复位)
+        //          适用于机器人正在运行时想看变量
+        // ============================================================
         {
             "name": "STM32 Attach (不复位)",
             "type": "cortex-debug",
             "request": "attach",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/smart_carrier.elf",
-            "servertype": "openocd",
-            "configFiles": [
-                "interface/stlink.cfg",
-                "target/stm32f4x.cfg"
-            ],
+            "servertype": "pyocd",
+            "device": "STM32F407VG",
             "svdFile": "${workspaceFolder}/STM32F407.svd",
+
             "rtos": "FreeRTOS",
-            "rtosView": "threads"
+            "rtosView": "threads",
+
+            "postAttachCommands": [
+                "monitor halt"
+            ]
         }
     ]
 }

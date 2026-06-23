@@ -3,35 +3,60 @@
     "tasks": [
 
         // ============================================
-        // 编译任务 (Ctrl+Shift+B)
+        //  1. CMake 配置 (只需运行一次, 或在 CMakeLists.txt 变更后)
         // ============================================
         {
-            "label": "Build STM32",
+            "label": "CMake Configure (Ninja)",
             "type": "shell",
-            "command": "make",
+            "command": "cmake",
             "args": [
-                "all",
+                "-B", "build",
+                "-G", "Ninja",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+        {
+            "label": "CMake Configure (MinGW Make)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B", "build",
+                "-G", "\"MinGW Makefiles\"",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+
+        // ============================================
+        //  2. 编译 (Ctrl+Shift+B)
+        //     CMake --build 自动检测生成器
+        // ============================================
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
                 "-j8"
             ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "options": { "cwd": "${workspaceFolder}" },
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "problemMatcher": {
-                "owner": "cpp",
-                "fileLocation": [
-                    "absolute"
-                ],
+                "owner": "c",
+                "fileLocation": ["absolute"],
                 "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(fatal error|error|warning):\\s+(.*)$",
+                    "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
                 }
             },
             "presentation": {
@@ -44,79 +69,93 @@
         },
 
         // ============================================
-        // 清理任务
+        //  3. 清理
         // ============================================
         {
             "label": "Clean",
             "type": "shell",
-            "command": "make",
-            "args": [
-                "clean"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "command": "cmake",
+            "args": ["--build", "build", "--target", "clean"],
+            "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": [],
-            "presentation": {
-                "reveal": "silent",
-                "panel": "shared"
-            }
+            "presentation": { "reveal": "silent", "panel": "shared" }
         },
 
         // ============================================
-        // 烧录任务
+        //  4. 烧录 — pyOCD (推荐)
         // ============================================
         {
-            "label": "Flash (ST-Link)",
+            "label": "Flash (pyOCD)",
             "type": "shell",
-            "command": "make",
+            "command": "pyocd",
             "args": [
-                "flash"
+                "load", "build/smart_carrier.hex",
+                "--target", "stm32f407vg",
+                "--frequency", "4000000"
             ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": [
-                "Build STM32"
-            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": ["Build"],
             "problemMatcher": [],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
+            "presentation": { "reveal": "always", "panel": "shared" }
         },
 
         // ============================================
-        // 启动 OpenOCD 调试服务器 (手动模式)
+        //  5. 烧录 — OpenOCD (备选)
         // ============================================
         {
-            "label": "Start OpenOCD Server",
+            "label": "Flash (OpenOCD)",
             "type": "shell",
             "command": "openocd",
             "args": [
                 "-f", "interface/stlink.cfg",
-                "-f", "target/stm32f4x.cfg"
+                "-f", "target/stm32f4x.cfg",
+                "-c", "program build/smart_carrier.elf verify reset exit"
             ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "isBackground": true,
-            "problemMatcher": {
-                "pattern": {
-                    "regexp": "^(Info|Error|Warning):\\s+(.*)$",
-                    "severity": 1,
-                    "message": 2
-                },
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": ".*Listening on port.*",
-                    "endsPattern": ".*"
-                }
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated"
-            }
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": ["Build"],
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+
+        // ============================================
+        //  6. 检查工具链是否可用
+        // ============================================
+        {
+            "label": "Check Toolchain",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "echo '=== arm-none-eabi-gcc ===' && arm-none-eabi-gcc --version | head -1 && echo '' && echo '=== cmake ===' && cmake --version | head -1 && echo '' && echo '=== ninja ===' && ninja --version 2>/dev/null || echo 'ninja not found' && echo '' && echo '=== pyocd ===' && pyocd --version 2>/dev/null || echo 'pyocd not found' && echo '' && echo '=== openocd ===' && openocd --version 2>&1 | head -1 || echo 'openocd not found' && echo '' && echo '=== arm-none-eabi-gdb ===' && arm-none-eabi-gdb --version | head -1 || echo 'arm-none-eabi-gdb not found'"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+
+        // ============================================
+        //  7. 编译 + 烧录 (一键)
+        // ============================================
+        {
+            "label": "Build & Flash",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Build", "Flash (pyOCD)"],
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared" }
+        },
+
+        // ============================================
+        //  8. 全清理 (删除 build/ 目录)
+        // ============================================
+        {
+            "label": "Clean All",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "rm -rf build && echo 'build/ deleted'"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent", "panel": "shared" }
         }
     ]
 }

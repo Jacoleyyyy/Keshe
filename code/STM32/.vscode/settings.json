@@ -1,50 +1,64 @@
 {
     // ============================================
-    // 默认使用 ARM GCC 编译
+    //  智能搬运机器人 — VSCode 工作区设置
+    //  工具链: ARM GCC + CMake + clangd + pyOCD + Cortex-Debug
     // ============================================
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
 
-    // 文件关联
+    // ── clangd: 语法服务器 (替代 Microsoft C/C++) ──
+    "clangd.arguments": [
+        "--background-index",
+        "--clang-tidy",
+        "--header-insertion=never",
+        "--completion-style=detailed",
+        "--function-arg-placeholders=false",
+        "--log=error"
+    ],
+    // 禁止 MS C/C++ 插件接管 (避免和 clangd 冲突)
+    "C_Cpp.intelliSenseEngine": "disabled",
+
+    // ── 文件关联 ──
     "files.associations": {
         "*.h": "c",
         "*.c": "c",
-        "cmsis_os.h": "c",
-        "FreeRTOS.h": "c",
-        "task.h": "c",
-        "queue.h": "c",
-        "semphr.h": "c",
-        "portmacro.h": "c",
-        "stm32f4xx_hal.h": "c",
-        "stm32f4xx_hal_conf.h": "c",
-        "gpio.h": "c",
-        "rcc.h": "c",
-        "tim.h": "c",
-        "usart.h": "c",
-        "i2c.h": "c",
-        "system_stm32f4xx.h": "c"
+        "*.s": "arm-assembly",
+        "*.ld": "linkerscript"
     },
 
-    // Cortex-Debug 设置
+    // ── Cortex-Debug: ARM 调试器插件 ──
     "cortex-debug.variableUseNaturalFormat": true,
     "cortex-debug.registerUseNaturalFormat": true,
     "cortex-debug.displayDemangled": true,
     "cortex-debug.showRTOSDebugOutput": true,
     "cortex-debug.armToolchainPath": "C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/13.3.rel1/bin",
+    // 如果 arm-none-eabi-gdb 在 PATH 中, 上面那行可以注释掉:
+    // "cortex-debug.armToolchainPath": null,
 
-    // 编辑器设置
+    // ── CMake ──
+    "cmake.configureOnOpen": false,
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+
+    // ── 编辑器 ──
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "editor.rulers": [100],
     "editor.formatOnSave": false,
+    "editor.semanticHighlighting.enabled": true,
 
-    // 文件排除 (不显示编译产物)
+    // ── 文件排除 ──
     "files.exclude": {
-        "build": true
+        "build": true,
+        ".cache": true
+    },
+    "search.exclude": {
+        "build/**": true
     },
 
-    // 搜索排除
-    "search.exclude": {
-        "build/**": true,
-        "Drivers/**": false
+    // ── 终端: 使用 Git Bash ──
+    "terminal.integrated.defaultProfile.windows": "Git Bash",
+    "terminal.integrated.profiles.windows": {
+        "Git Bash": {
+            "path": "C:/Program Files/Git/bin/bash.exe",
+            "args": ["--login"]
+        }
     }
 }
