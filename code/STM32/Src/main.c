@@ -402,14 +402,14 @@ void HAL_TIM_Encoder_MspInit(TIM_HandleTypeDef *htim)
 void HAL_UART_MspInit(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART3) {
-        __HAL_RCC_GPIOB_CLK_ENABLE();
+        __HAL_RCC_GPIOD_CLK_ENABLE();
         GPIO_InitTypeDef g = {0};
         g.Mode = GPIO_MODE_AF_PP;
         g.Pull = GPIO_PULLUP;
         g.Speed = GPIO_SPEED_FREQ_HIGH;
         g.Alternate = GPIO_AF7_USART3;
-        g.Pin = GPIO_PIN_10 | GPIO_PIN_11;
-        HAL_GPIO_Init(GPIOB, &g);
+        g.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+        HAL_GPIO_Init(GPIOD, &g);
     }
 }
 

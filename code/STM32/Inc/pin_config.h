@@ -152,14 +152,14 @@
 
 /* ============================================================
  * 通信引脚 — UART3 与 MaixCAM 通信
- * PB10(TX)/PB11(RX), 115200bps
- * (WHEELTEC原用于IMU模拟I2C, 我们释放给MaixCAM用)
+ * PD8(TX)/PD9(RX), 115200bps
+ * (C30D-1.0 出厂默认 UART3 引脚)
  * ============================================================ */
 #define MAIX_UART               USART3
-#define MAIX_UART_TX_PORT       GPIOB
-#define MAIX_UART_TX_PIN        GPIO_PIN_10
-#define MAIX_UART_RX_PORT       GPIOB
-#define MAIX_UART_RX_PIN        GPIO_PIN_11
+#define MAIX_UART_TX_PORT       GPIOD
+#define MAIX_UART_TX_PIN        GPIO_PIN_8
+#define MAIX_UART_RX_PORT       GPIOD
+#define MAIX_UART_RX_PIN        GPIO_PIN_9
 #define MAIX_UART_BAUDRATE      115200
 
 /* ============================================================
@@ -192,8 +192,8 @@
 #define BUZZER_PORT             GPIOA
 #define BUZZER_PIN              GPIO_PIN_8
 
-/* 系统LED */
-#define SYS_LED_PORT            GPIOE
-#define SYS_LED_PIN             GPIO_PIN_2
+/* 系统LED (C30D-1.0 V1.0板 = PA12) */
+#define SYS_LED_PORT            GPIOA
+#define SYS_LED_PIN             GPIO_PIN_12
 
 #endif /* __PIN_CONFIG_H */

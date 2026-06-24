@@ -169,8 +169,8 @@ void Motor_PIDUpdate(void)
         if (!m->htim_ch1) continue;
 
         int16_t delta = Motor_GetEncoderDelta((MotorID_t)i);
-        /* RPM = delta / 120000 * 60000 = delta / 2 */
-        m->current_rpm = (float)delta * 0.5f;
+        /* RPM = delta / 60000 * 60000 = delta (30:1减速比) */
+        m->current_rpm = (float)delta;
 
         float err = m->target_rpm - m->current_rpm;
         float duty = PID_Update(&m->pid, m->current_rpm);

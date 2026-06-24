@@ -90,8 +90,8 @@ typedef enum {
 
 #define ENCODER_PPR             500
 #define ENCODER_CPR             (ENCODER_PPR * 4)
-#define GEAR_RATIO              60.0f
-#define PULSE_PER_REV           (uint32_t)(ENCODER_CPR * GEAR_RATIO) /* 120,000 */
+#define GEAR_RATIO              30.0f
+#define PULSE_PER_REV           (uint32_t)(ENCODER_CPR * GEAR_RATIO) /* 60,000 */
 
 #define MAX_LINEAR_SPEED_MM_S   300.0f
 #define MAX_ANGULAR_SPEED_DEG_S 90.0f
